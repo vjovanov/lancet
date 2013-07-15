@@ -56,6 +56,8 @@ unmanagedClasspath in Compile <++= baseDirectory map { base =>
     "com.oracle.graal.boot.test",
     "com.oracle.graal.bytecode",
     "com.oracle.graal.compiler",
+    "com.oracle.graal.phases",
+    "com.oracle.graal.phases.common",
     "com.oracle.graal.debug",
     "com.oracle.graal.examples",
     "com.oracle.graal.graph",
