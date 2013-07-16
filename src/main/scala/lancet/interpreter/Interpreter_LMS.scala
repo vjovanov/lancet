@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
@@ -11,10 +11,10 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see http://www.gnu.org/licenses/agpl.html.
- * 
+ *
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
@@ -23,6 +23,9 @@
 package lancet.interpreter
 
 import lancet.core._
+import lancet.codegen._
+
+import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
 
 import java.lang.reflect.{Array=>jlrArray,_}
 import java.util.{Vector=>_,List=>_,_}
@@ -37,102 +40,12 @@ import com.oracle.graal.bytecode._
 import scala.virtualization.lms.common._
 import scala.virtualization.lms.internal._
 
+trait BytecodeInterpreter_LMS extends BaseBytecodeInterpreter_LMS { self =>
 
-//@SuppressWarnings("static-method")
-trait BytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInterpreter_Common_Compile { self =>
-
-    import BytecodeInterpreter._
-
-    def getRuntimeInterface(m: MetaAccessProvider) = new Runtime_LMS(m)
-
-    override def trace(level: Int, message: String)  = super.trace(level, "// " + message)
-
-    override def initialize(): Unit = {
-      ScalaCompile.reset()
-      super.initialize()
-    }
-
-    var emitCheckCast = true
-    var emitUniqueOpt = true
-    
-    var debugGlobalDefs = false
-    var debugDepGraph = false
-    
-    // for scoping "RES" vars. TODO: move?
-    var curResId = 0
-    def RES = "RES" + curResId    
-
-    // ---------- high level execution loop ----------
-
-    /* see test4
-    def quoteFun[A:Manifest,B:Manifest](f: A=>B): String = {
-      val (src0, res) = captureOutputResult { 
-
-        val arg = reflect[A]("ARG")
-
-        execute(f.getClass.getMethod("apply", manifest[A].erasure), Array[Rep[Object]](unit(f),arg.asInstanceOf[Rep[Object]])(repManifest[Object]))
-
-      }
-
-      "{ (ARG: " + manifest[A] + ") => " + src0 + "}"
-    }*/
-
-    def printIndented(str: String)(emit: String => Unit): Unit = {
-      val lines = str.split("\n")
-      var indent = 1
-      for (l0 <- lines) {
-        val l = l0.trim
-        if (l.length > 0) {
-        var open = 0
-        var close = 0
-        l foreach { case '{' => open += 1 case '}' => close += 1 case _ => }
-        val d = if (close == 0) 0 else l.takeWhile(_ == '}').length
-        emit("  "*(indent-d) + l)
-        indent += (open - close)
-        }
-      }
-    }
-
-    def createCodegen(): GEN_Scala_LMS { val IR: self.type } = 
+  def createCodegen(): GEN_Scala_LMS { val IR: self.type } =
       new GEN_Scala_LMS { val IR: self.type = self }
 
-    abstract class Fun[A,B] extends (A=>B) {
-      def code: String
-      def compiled: Fun[A,B]
-      def interpreted: Fun[A,B]
-      def inline: Fun[A,B]
-      def printcode = println(code)
-    }
-
-    var lastcode: String = "(empty)"
-
-    def fun[B:Manifest](f: =>B): Fun[Unit,B] = fun[Object,B]{ x => f }.asInstanceOf[Fun[Unit,B]]
-
-    def fun[A:Manifest,B:Manifest](f: A=>B): Fun[A,B] = {
-      lms0[A,B] { arg =>
-
-        execute(
-          f.getClass.getMethod("apply", manifest[A].erasure), 
-          Array[Rep[Object]](unit(f),arg.asInstanceOf[Rep[Object]])(repManifest[Object])
-        ).asInstanceOf[Rep[B]]
-
-
-      }
-    }
-
-    // XX conflict with delite method
-    def compile0[A:Manifest,B:Manifest](f: A=>B): A=>B = fun(f)
-    //def compile[A:Manifest,B:Manifest](f: A=>B): A=>B = fun(f)
-
-
-    def lms[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B] = {
-      lms0[A,B] { arg =>
-        val res = f(arg)
-        reflect[B]("RES = ",res)(mtr)
-      }
-    }
-
-    def lms0[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B] = {
+  def lms0[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B] = {
 
       implicit val tp = manifestToTypeRep(manifest[B])
       val (maStr, mbStr) = (manifestStr(manifest[A]), manifestStr(manifest[B]))
@@ -154,6 +67,7 @@ trait BytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInter
         DynExp[B](RES)
       }
 
+
       val codegen = createCodegen()
 
       VConstantPool = Vector.empty
@@ -166,7 +80,7 @@ trait BytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInter
       }
 
       val cst = VConstantPool
-    
+
       val stream = new StringWriter
       codegen.withStream(new PrintWriter(stream)) {
 //        codegen.emitSource(List(arg),y,"Generated",codegen.stream)
@@ -175,7 +89,7 @@ trait BytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInter
       }
 
 
-      val source = stream.toString 
+      val source = stream.toString
       printIndented(source)(Console.println)
 
 
@@ -202,6 +116,139 @@ trait BytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInter
       }
       fun
     }
+}
+
+trait BytecodeInterpreter_LMS_Graal extends BaseBytecodeInterpreter_LMS { self =>
+
+  def createCodegen(): GEN_Graal_LMS { val IR: self.type } =
+      new GEN_Graal_LMS { val IR: self.type = self; }
+
+  def lms0[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B] = {
+
+      implicit val tp = manifestToTypeRep(manifest[B])
+      val (maStr, mbStr) = (manifestStr(manifest[A]), manifestStr(manifest[B]))
+
+      val arg = fresh[A]
+      val y = reify {
+        f(arg)
+      }
+
+      val cst = VConstantPool
+      val codegen = createCodegen
+      codegen.emitBlock(y)
+      val comp = codegen.compile[A, B]()
+
+      if (debugGlobalDefs) globalDefs.foreach(println)
+
+      if (debugDepGraph) {
+        val exp = new ExportGraph { val IR: self.type = self }
+        println("dumping graph to: "+ this.getClass.getName)
+        exp.exportGraph(this.getClass.getName)(y.res)
+      }
+
+      val fun: Fun[A,B] = new Fun[A,B] {
+        def code = "Emitted directly to graal IR."
+        def compiled = this
+        def interpreted = ???
+        def inline = ???
+        def apply(x:A): B = comp(x)
+      }
+      fun
+    }
+}
+
+//@SuppressWarnings("static-method")
+trait BaseBytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInterpreter_Common_Compile { self =>
+
+    import BytecodeInterpreter._
+
+    def getRuntimeInterface(m: MetaAccessProvider) = new Runtime_LMS(m)
+
+    override def trace(level: Int, message: String)  = super.trace(level, "// " + message)
+
+    override def initialize(): Unit = {
+      ScalaCompile.reset()
+      super.initialize()
+    }
+
+    var emitCheckCast = true
+    var emitUniqueOpt = true
+
+    var debugGlobalDefs = false
+    var debugDepGraph = true
+
+    // for scoping "RES" vars. TODO: move?
+    var curResId = 0
+    def RES = "RES" + curResId
+
+    // ---------- high level execution loop ----------
+
+    /* see test4
+    def quoteFun[A:Manifest,B:Manifest](f: A=>B): String = {
+      val (src0, res) = captureOutputResult {
+
+        val arg = reflect[A]("ARG")
+
+        execute(f.getClass.getMethod("apply", manifest[A].erasure), Array[Rep[Object]](unit(f),arg.asInstanceOf[Rep[Object]])(repManifest[Object]))
+
+      }
+
+      "{ (ARG: " + manifest[A] + ") => " + src0 + "}"
+    }*/
+
+    def printIndented(str: String)(emit: String => Unit): Unit = {
+      val lines = str.split("\n")
+      var indent = 1
+      for (l0 <- lines) {
+        val l = l0.trim
+        if (l.length > 0) {
+        var open = 0
+        var close = 0
+        l foreach { case '{' => open += 1 case '}' => close += 1 case _ => }
+        val d = if (close == 0) 0 else l.takeWhile(_ == '}').length
+        emit("  "*(indent-d) + l)
+        indent += (open - close)
+        }
+      }
+    }
+
+    abstract class Fun[A,B] extends (A=>B) {
+      def code: String
+      def compiled: Fun[A,B]
+      def interpreted: Fun[A,B]
+      def inline: Fun[A,B]
+      def printcode = println(code)
+    }
+
+    var lastcode: String = "(empty)"
+
+    def fun[B:Manifest](f: =>B): Fun[Unit,B] = fun[Object,B]{ x => f }.asInstanceOf[Fun[Unit,B]]
+
+    def fun[A:Manifest,B:Manifest](f: A=>B): Fun[A,B] = {
+      lms0[A,B] { arg =>
+
+        execute(
+          f.getClass.getMethod("apply$mcII$sp", manifest[A].erasure),
+          Array[Rep[Object]](unit(f),arg.asInstanceOf[Rep[Object]])(repManifest[Object])
+        ).asInstanceOf[Rep[B]]
+
+
+      }
+    }
+
+    // XX conflict with delite method
+    def compile0[A:Manifest,B:Manifest](f: A=>B): A=>B = fun(f)
+    //def compile[A:Manifest,B:Manifest](f: A=>B): A=>B = fun(f)
+
+
+    def lms[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B] = {
+      lms0[A,B] { arg =>
+        val res = f(arg)
+        reflect[B]("RES = ",res)(mtr)
+      }
+    }
+
+    def lms0[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B]
 
     //@Override
     def execute(method: ResolvedJavaMethod, boxedArguments: Array[Rep[Object]]): Rep[Object] = {// throws Throwable {
@@ -227,7 +274,7 @@ trait BytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInter
               rootFrame.pushObject(unit(method));
               rootFrame.pushObject(unit(boxedArguments));
             }
-            
+
 
             // TODO (chaeubl): invoke the first method in the same way as any other method (the method might be redirected!)
             val firstFrame: InterpreterFrame = rootFrame.create(method, receiver, 0, false);
@@ -404,7 +451,7 @@ trait BytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInter
         // get the receiver's class, if possible
 
         objectGetClass(receiver) match {
-          case Some(clazz) => 
+          case Some(clazz) =>
             val method = resolveType(parent, clazz).resolveMethod(m);
             return invokeDirect(parent, method, true)
           case _ =>

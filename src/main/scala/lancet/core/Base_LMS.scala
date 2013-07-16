@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
@@ -11,10 +11,10 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see http://www.gnu.org/licenses/agpl.html.
- * 
+ *
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
@@ -34,7 +34,7 @@ trait IR_LMS_Base extends EffectExp {
   def liftConst[T:TypeRep](x:T): Rep[T]
   type TypeRep[T]
   implicit def typeRepToManifest[T:TypeRep]: Manifest[T]
-  
+
   def quickString[A:TypeRep](d: Def[A]): String = d.toString
 
   case class Unstructured[A](s: List[Any]) extends Def[A]
@@ -49,7 +49,7 @@ trait IR_LMS_Base extends EffectExp {
   override def boundSyms(e: Any): List[Sym[Any]] = e match {
     case Unstructured(xs) => blocks(xs) flatMap effectSyms
     case Patch(key,block) => effectSyms(block)
-    case BlockDef(key,keyid,xs,body) => 
+    case BlockDef(key,keyid,xs,body) =>
       val phiSym = phiSyms.getOrElseUpdate(keyid, Sym(-keyid))
       //println(s"boundSyms add accidental dependency $xs + $phiSym")
       effectSyms(body) ++ List(phiSym)
@@ -61,7 +61,7 @@ trait IR_LMS_Base extends EffectExp {
   val phiSyms = new scala.collection.mutable.HashMap[Int,Sym[Any]]
 
   override def tunnelSyms(e: Any): List[Sym[Any]] = e match {
-    case BlockDef(key,keyid,xs,body) => 
+    case BlockDef(key,keyid,xs,body) =>
     // FIXME: here's a problem:
     // xs may contains items like DynExp("PHI_3_6") on which stuff in the block depends.
     // since these are not symbols we can't return them here....
@@ -81,7 +81,7 @@ trait IR_LMS_Base extends EffectExp {
     val keyid = getBlockId(e)
     if (keyid >= 0) {
       val phiSym = phiSyms.getOrElseUpdate(keyid, Sym(-keyid))
-      xx ++ List(phiSym) 
+      xx ++ List(phiSym)
     } else xx
   }
 
@@ -90,7 +90,7 @@ trait IR_LMS_Base extends EffectExp {
     val keyid = getBlockId(e)
     if (keyid >= 0) {
       val phiSym = phiSyms.getOrElseUpdate(keyid, Sym(-keyid))
-      xx ++ List((phiSym,1.0)) 
+      xx ++ List((phiSym,1.0))
     } else xx
   }
 
@@ -129,7 +129,7 @@ trait GEN_Scala_LMS_Base extends ScalaGenEffect {
     stream.print("}")
   }}
 
-  override def emitValDef(sym: Sym[Any], rhs: String) = 
+  override def emitValDef(sym: Sym[Any], rhs: String) =
     /*if (sym.tp == manifest[Unit]) stream.println(rhs+";")
     else*/ super.emitValDef(sym,rhs+";")
 
@@ -138,13 +138,13 @@ trait GEN_Scala_LMS_Base extends ScalaGenEffect {
         if (sym.tp != manifest[Unit])
           stream.print("val "+quote(sym)+": "+remap(sym.tp)+" = ")
         xs foreach {
-          case b: Block[a] => 
+          case b: Block[a] =>
             emitBlockFull(b)
-          case b: Exp[a] => 
+          case b: Exp[a] =>
             stream.print(quote(b))
-/*          case b: Manifest[a] => 
+/*          case b: Manifest[a] =>
             stream.print(remap(b))
-          case b: TypeRep[a] => 
+          case b: TypeRep[a] =>
             stream.print(remap(b.manif)) // ok?*/
           case e =>
             stream.print(e)
@@ -155,7 +155,7 @@ trait GEN_Scala_LMS_Base extends ScalaGenEffect {
       emitBlock(block)
     //stream.println("// patch "+sym+" }")
     case BlockDef(key, keyid, params, body) =>
-      if (debugBlockKeys) 
+      if (debugBlockKeys)
         stream.println("// "+key+"\n")
       stream.print("def BLOCK_"+keyid+"(")
       stream.print(params.map(v=>quote(v)+":"+remap(v.tp)).mkString(","))
@@ -174,7 +174,7 @@ trait GEN_Scala_LMS_Base extends ScalaGenEffect {
   override def quote(e: Exp[Any]) = e match {
     case DynExp(a) => a.toString
     case Const(a) => VConstToString(a)(e.typ)
-    case Sym(n) if n <= -1000 => 
+    case Sym(n) if n <= -1000 =>
       // HACK: lms wants syms for consts subject to CSP
       "Const_"+(-n -1000)
     case _ => super.quote(e)
@@ -245,13 +245,13 @@ trait Base_LMS0 extends Base_LMS1 {
 
   val booleanManif = manifest[Boolean]
   val byteManif    = manifest[Byte]
-  val charManif    = manifest[Char] 
-  val shortManif   = manifest[Short]   
-  val intManif     = manifest[Int] 
-  val longManif    = manifest[Long] 
-  val floatManif   = manifest[Float]   
-  val doubleManif  = manifest[Double]   
-  val objectManif  = manifest[Object]   
+  val charManif    = manifest[Char]
+  val shortManif   = manifest[Short]
+  val intManif     = manifest[Int]
+  val longManif    = manifest[Long]
+  val floatManif   = manifest[Float]
+  val doubleManif  = manifest[Double]
+  val objectManif  = manifest[Object]
 
   val classManif   = manifest[Class[Object]]
   val unitManif    = manifest[Unit]
@@ -294,15 +294,15 @@ trait Base_LMS0 extends Base_LMS1 {
     case null => "null"
     // TODO: primitives, arrays
     case s: String => ("\""+s.replace("\n","\\n")+"\"") // TODO: proper escape
-    case c: Class[_] => 
+    case c: Class[_] =>
       c.getName() match {
         case "char" => "classOf[Char]"
-        case name => 
+        case name =>
           ("Class.forName(\""+name+"\")")//("classOf["+c.getName+"]")
       }
     //case o: Array[Object] => ("(null:Array[Object])") // TODO
     //case o: Object => ("(null:"+o.getClass.getName+")")
-    case _ => 
+    case _ =>
       var idx = VConstantPool.indexWhere(_._2 == x) // should use eq ??
       if (idx < 0) {
         idx = VConstantPool.size
@@ -325,7 +325,7 @@ trait Base_LMS0 extends Base_LMS1 {
     case "lancet.interpreter.TestInterpreter5$Decompiler" => "lancet.interpreter.TestInterpreter5#Decompiler" // scalac crash
     //TODO/FIXME
     case s if !Modifier.isPublic(x.getModifiers) => "Object /*" + s + "*/" //s <-- class may be private...
-    case s => 
+    case s =>
       //if (s.contains("$")) println("careful: "+s)
       val params = x.getTypeParameters
       if (params.length == 0) s
@@ -343,7 +343,7 @@ trait Base_LMS0 extends Base_LMS1 {
     if (Modifier.isPublic(cls.getModifiers)) (x,cls) else (x,classOf[Object])
     // for now, just fix to Object (hack?)
     if (cls == classOf[java.lang.reflect.Method]) (x,cls)
-    else 
+    else
     (x,classOf[Object])
   }
 
@@ -449,13 +449,13 @@ trait Base_LMS_Opt extends Base_LMS_Abs with Base_LMS {
     case Dyn(s) => store.getOrElse(s, Top).asInstanceOf[Val[T]] match {
       case x => x
     }
-    case _ => 
+    case _ =>
       emitString("ERROR // can't eval: " + x)
       Top
   }
 
   // TODO: generalize and move elsewhere
-  
+
   def getFieldForLub[T:TypeRep](base: Rep[Object], cls: Class[_], k: String): Rep[T] = throw new Exception
 
   def curBlockId: Int // defined in Opt4 (bit of a hack)
@@ -489,7 +489,7 @@ trait Base_LMS_Opt extends Base_LMS_Abs with Base_LMS {
 */
 
       /*
-  
+
       TODO: - need to handle SSA-like fields in partial objects
             - we create new LUB_parent_key entries
             - when calling a block, we need to set up the right
@@ -506,7 +506,7 @@ trait Base_LMS_Opt extends Base_LMS_Abs with Base_LMS {
         ks.map { k =>
           (k, (x.get(k), y.get(k)) match {
             case (Some(a),Some(b)) if a == b => a
-            case (Some(Static(a)),Some(bb@Static(b))) => 
+            case (Some(Static(a)),Some(bb@Static(b))) =>
               val str = "LUB_b"+curBlockId+"_"+p+"_"+k
               if (quote(b) != str)
                 emitString("val "+str+" = " + quote(b) + "; // LUBC(" + a + "," + b + ")") // FIXME: kill in expr!
@@ -516,7 +516,7 @@ trait Base_LMS_Opt extends Base_LMS_Abs with Base_LMS {
               res
             case (Some(a),None) if p.startsWith("pConst") && k == "clazz" => a // class is VConstant
             case (None,Some(b)) if p.startsWith("pConst") && k == "clazz" => b // class is VConstant
-            case (a,b) => 
+            case (a,b) =>
               val str = "LUB_b"+curBlockId+"_"+p+"_"+k
               val tp = if (b.nonEmpty) {
                 //if (b.get.toString != str && !y0.contains(b.get.toString)) {
@@ -525,7 +525,7 @@ trait Base_LMS_Opt extends Base_LMS_Abs with Base_LMS {
                 if (quote(b.get) != str)
                   emitString("val "+str+" = " + quote(b.get) + "; // Alias(" + a + "," + b + ")") // FIXME: kill in expr!
                 b.get.typ.asInstanceOf[TypeRep[Any]]
-              } else {                
+              } else {
                 val tp = a.get.typ.asInstanceOf[TypeRep[Any]]
                 // we don't have the b value in the store
                 // check if this refers to a VConst field; if so get the field value
@@ -540,7 +540,7 @@ trait Base_LMS_Opt extends Base_LMS_Abs with Base_LMS {
 
                   if (quote(fld) != str)
                     emitString("val "+str+" = " + quote(fld) + "; // XXX LUBC(" + a + "," + b + ")") // FIXME: kill in expr!
-                } else 
+                } else
                   emitString("val "+str+" = " + quote(a.get) + "; // AAA Alias(" + a + "," + b + ")") // FIXME: kill in expr!
                 tp
               }
@@ -565,11 +565,11 @@ trait Base_LMS_Opt extends Base_LMS_Abs with Base_LMS {
           //case (None,Some(Partial(bs))) => Partial(lubPartial(k)(Map("alloc"->liftConst(null)),bs))
           //case (Some(Partial(as)),None) => emitString("val "+k+" = null // lub "+Partial(as)+", None "); Top
           case (Some(a),Some(b)) => Top
-          case (Some(a),b) => 
-            //println("// strange lub: "+k+" -> Some("+a+"), "+b); 
+          case (Some(a),b) =>
+            //println("// strange lub: "+k+" -> Some("+a+"), "+b);
             Top //a
-          case (a,Some(b)) => 
-            //println("// strange lub: "+k+" -> "+a+",Some("+b+")"); 
+          case (a,Some(b)) =>
+            //println("// strange lub: "+k+" -> "+a+",Some("+b+")");
             Top //b
         })
       }

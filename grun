@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export JAVA_HOME=~/src/graal/jdk1.7.0_17/product
+export JAVA_HOME=$GRAAL/jdk1.7.0_17/product
 
 
 if [ $# -lt 1 ]
