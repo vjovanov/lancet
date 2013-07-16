@@ -29,11 +29,30 @@ import scala.collection.mutable.{Map => MMap}
 import scala.virtualization.lms.internal._
 import lancet.core._
 
+import java.util.concurrent.Callable
+
 import com.oracle.graal.phases._   // PhasePlan
 import com.oracle.graal.phases.common._
+import com.oracle.graal.phases.PhasePlan.PhasePosition
 import com.oracle.graal.hotspot._
 import com.oracle.graal.java._
 import com.oracle.graal.nodes._
+import com.oracle.graal.{java=>J,_}
+import com.oracle.graal.debug._         // Debug
+import com.oracle.graal.api.meta._      // ResolvedJavaMethod
+import com.oracle.graal.api.code._      // Assumptions
+import com.oracle.graal.hotspot._
+import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
+import com.oracle.graal.compiler._      // GraalCompiler
+import com.oracle.graal.java._          // GraphBuilderConfiguration
+import com.oracle.graal.graph._
+import com.oracle.graal.nodes.{java=>J,_}   // StructuredGraph
+import com.oracle.graal.nodes.java._        // MethodCallTargetNode
+import com.oracle.graal.debug._;
+import collection.JavaConversions._
+import com.oracle.graal.debug.internal._
+import com.oracle.graal.printer._
+
 
 trait GEN_Graal_LMS extends BaseGraalIRGen with GraalCompile {
   val IR: Expressions with Effects
@@ -55,12 +74,88 @@ trait GEN_Graal_LMS extends BaseGraalIRGen with GraalCompile {
 
 }
 
-trait GraalCompile {
-  def compile[A, B](): A => B = {
-    // reflectively create a function class with an adequate number of params
+trait GraalCompile { self: GEN_Graal_LMS =>
 
+  val compiler = HotSpotGraalRuntime.getInstance().getCompiler();
+  val backend = HotSpotGraalRuntime.getInstance().getBackend();
+  val target = HotSpotGraalRuntime.getInstance().getTarget();
+  val cache = HotSpotGraalRuntime.getInstance().getCache();
+
+  def compile[A, B](f: A => B): A => B = {
+    // TODO reflectively create a function class with an adequate number of params (check with tiark)
     // compile the IR that you have to this function
+        val cls = f.getClass
+    val reflectMeth = cls.getDeclaredMethod("apply$mcII$sp", classOf[Int])
+    val method = runtime.lookupJavaMethod(reflectMeth)
+
+    val plan = new PhasePlan();
+    plan.addPhase(PhasePosition.HIGH_LEVEL, printGraph("HIGH_LEVEL"))
+    plan.addPhase(PhasePosition.MID_LEVEL, printGraph("MID_LEVEL"))
+    val result = topScope(method) {
+
+      // Building how the graph should look like
+      val res = GraalCompiler.compileMethod(runtime, backend, target, method, currentGraph, cache, plan, OptimisticOptimizations.ALL)
+      println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
+      println("===== DONE")
+
+      res
+    }
+
+    val compiledMethod = runtime.addMethod(method, result, null)
+
+    { (x:A) =>
+      val y = compiledMethod.executeVarargs(f, x.asInstanceOf[AnyRef])
+      y.asInstanceOf[B]
+    }
   }
+
+  // --------- Util
+
+  def topScope[A](method: ResolvedJavaMethod)(body: => A) = {
+    //val hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log + ",Escape", GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, System.out)
+    val hotspotDebugConfig =
+      new GraalDebugConfig(GraalOptions.Log,
+       GraalOptions.Meter,
+       GraalOptions.Time,
+       GraalOptions.Dump,
+       GraalOptions.MethodFilter,
+       System.out,
+       List(new GraphPrinterDumpHandler())
+      )
+
+    Debug.setConfig(hotspotDebugConfig)
+    Debug.scope("LMS", method, new Callable[A] {
+        def call: A = {
+          body
+        }
+    });
+  }
+
+  def printGraph(s: String, verbosity: Node.Verbosity = Node.Verbosity.Short) = phase { graph =>
+    println("===== " + s)
+    graph.getNodes.foreach(n => println(n.toString(verbosity) + n.inputs().map(_.toString(Node.Verbosity.Id)).mkString("(",",",")")))
+    println("----- " + s + " method calls ")
+    graph.getNodes(classOf[InvokeNode]).foreach(printInvoke)
+  }
+
+  def printInvoke(invoke: InvokeNode): Unit = {
+    val methodCallTarget = invoke.methodCallTarget()
+    val targetMethod = methodCallTarget.targetMethod() // ResolvedJavaMethod
+
+    println("  invoke: " + invoke)
+    println("    trgt: " + targetMethod)
+    println("    args: " + methodCallTarget.arguments())
+
+    val assumptions = new Assumptions(true)
+
+    val info = InliningUtil.getInlineInfo(methodCallTarget.invoke(), assumptions, OptimisticOptimizations.ALL)
+    println("    info: " + info)
+  }
+
+  def phase(f: StructuredGraph => Unit) = new Phase {
+    def run(graph: StructuredGraph) = f(graph)
+  }
+
 }
 
 trait BaseGraalIRGen extends NestedBlockTraversal {

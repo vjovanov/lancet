@@ -136,7 +136,7 @@ trait BytecodeInterpreter_LMS_Graal extends BaseBytecodeInterpreter_LMS { self =
       val cst = VConstantPool
       val codegen = createCodegen
       codegen.emitBlock(y)
-      val comp = codegen.compile[A, B]()
+      val comp = codegen.compile[A, B]((x: A) => ().asInstanceOf[B])
 
       if (debugGlobalDefs) globalDefs.foreach(println)
 
