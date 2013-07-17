@@ -25,10 +25,24 @@ package graalgen
 
 import lancet.api._
 import lancet.interpreter._
+import lancet.codegen._
 
 import com.oracle.graal.api.meta._      // ResolvedJavaMethod
 import com.oracle.graal.hotspot._
 import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
+import scala.virtualization.lms.common._
+import scala.virtualization.lms.util.OverloadHack
+
+trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPrimitives with LiftString with LiftVariables {
+  def main(arg: Rep[Int]): Rep[Int]
+}
+
+trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp { self =>
+    val codegen = new GEN_Graal_LMS { val IR: self.type = self }
+
+    codegen.emit(main)
+
+  }
 
 
 trait GraalGenBase {
@@ -46,12 +60,11 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
   // interpret
   def testInc = withOutFileChecked(prefix+"inc") {
 
-    val it = newInterpreter
-    it.TRACE = true
-    it.TRACE_BYTE_CODE = true
-
-    val res = it.compile { (x:Int) => x + 1 }
-
-    println("res: " + res)
+    withOutFile(prefix+"-graal") {
+      trait Prog extends DSL {
+        def main(x: Rep[Int]): Rep[Int] = x + 1
+      }
+      new Prog with Impl
+    }
   }
 }
