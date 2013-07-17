@@ -41,7 +41,7 @@ trait GraalGenBase {
 
 class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
-  val prefix = "test-out/test-graalgen-basic"
+  val prefix = "test-out/test-graalgen-basic-"
 
   // interpret
   def testInc = withOutFileChecked(prefix+"inc") {
