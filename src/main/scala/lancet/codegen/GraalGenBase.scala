@@ -25,11 +25,12 @@ package lancet.codegen
 import scala.virtualization.lms.util.GraphUtil
 import java.io.{File, PrintWriter}
 import scala.reflect.RefinedManifest
-import scala.collection.mutable.{Map => MMap}
+import scala.collection.mutable.{Map => MMap, ArrayBuffer}
 import scala.virtualization.lms.internal._
 import lancet.core._
 
 import java.util.concurrent.Callable
+import java.util.BitSet
 
 import com.oracle.graal.phases._   // PhasePlan
 import com.oracle.graal.phases.common._
@@ -52,22 +53,56 @@ import com.oracle.graal.debug._;
 import collection.JavaConversions._
 import com.oracle.graal.debug.internal._
 import com.oracle.graal.printer._
+import com.oracle.graal.api.meta._
 
 
-trait GEN_Graal_LMS extends BaseGraalIRGen with GraalCompile {
+
+trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: GraalBuilder =>
   val IR: Expressions with Effects
   import IR._
 
+  import graphBuilder._
   /**
    * @param args List of symbols bound to `body`
    * @param body Block to emit
    * @param className Name of the generated identifier
    * @param stream Output stream
    */
-  def emit[A : Manifest](args: List[Sym[_]], body: Block[A]): List[(Sym[Any], Any)] = {
+  def emit[A : Manifest](args: List[Sym[_]], body: Block[A], method: ResolvedJavaMethod): List[(Sym[Any], Any)] = {
     val staticData = getFreeDataBlock(body)
 
+    // initialize the stack with function arguments
+    args.foreach(insert)
+    // initialize the graph builder state
+    graphBuilder.init(new StructuredGraph(method))
+    // Construction
+    lastInstr = graph.start()
+    // TODO we will need the minimum tracking of live variables in blocks
+    // var removeLocals = new BitSet()
+    // frameState.clearNonLiveLocals(removeLocals)
+    // finish the start block
+    lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0));
+
+    frameState.cleanupDeletedPhis();
+    frameState.setRethrowException(false);
+
+    // LMS code generation
     emitBlock(body)
+
+
+    // return (TODO this needs to be more spohisticated)
+    loadLocal(lookup(body.res.asInstanceOf[Sym[Any]]), Kind.Int)
+
+    frameState.cleanupDeletedPhis();
+    frameState.setRethrowException(false);
+
+    val node = frameState.pop(Kind.Int) // TODO use the generic type
+    frameState.clearStack();
+    val retNode = new ReturnNode(node)
+    graph.add(retNode)
+    lastInstr.setNext(retNode)
+
+    graphBuilder.finalize()
 
     staticData
   }
@@ -84,17 +119,19 @@ trait GraalCompile { self: GEN_Graal_LMS =>
   def compile[A, B](f: A => B): A => B = {
     // TODO reflectively create a function class with an adequate number of params (check with tiark)
     // compile the IR that you have to this function
-        val cls = f.getClass
+    val cls = f.getClass
     val reflectMeth = cls.getDeclaredMethod("apply$mcII$sp", classOf[Int])
     val method = runtime.lookupJavaMethod(reflectMeth)
 
-    val plan = new PhasePlan();
+    val plan = new PhasePlan()
+    plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
     plan.addPhase(PhasePosition.HIGH_LEVEL, printGraph("HIGH_LEVEL"))
     plan.addPhase(PhasePosition.MID_LEVEL, printGraph("MID_LEVEL"))
+
     val result = topScope(method) {
 
       // Building how the graph should look like
-      val res = GraalCompiler.compileMethod(runtime, backend, target, method, currentGraph, cache, plan, OptimisticOptimizations.ALL)
+      val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
       println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
       println("===== DONE")
 
@@ -158,19 +195,19 @@ trait GraalCompile { self: GEN_Graal_LMS =>
 
 }
 
-trait BaseGraalIRGen extends NestedBlockTraversal {
-  val IR: Expressions with Effects
+trait GraalGenBase extends BlockTraversal {
+  val IR: Expressions
   import IR._
 
   val runtime = HotSpotGraalRuntime.getInstance().getRuntime();
   val config = new GraphBuilderConfiguration(GraphBuilderConfiguration.ResolvePolicy.Eager, null) // resolve eagerly, lots of DeoptNodes otherwise
 
-  val graphBuilder: LancetGraphBuilder = new LancetGraphBuilder(runtime, config, OptimisticOptimizations.ALL)
-
   // graal stuff imported
+  val graphBuilder: LancetGraphBuilder = new LancetGraphBuilder(runtime, config, OptimisticOptimizations.ALL)
+  def graph: StructuredGraph = graphBuilder.currentGraph
+
   var analysisResults: MMap[String,Any] = null.asInstanceOf[MMap[String,Any]]
 
-  def currentGraph: StructuredGraph = graphBuilder.currentGraph
   // Initializer
   def initializeGenerator(buildDir:String, args: Array[String], _analysisResults: MMap[String,Any]): Unit = { analysisResults = _analysisResults }
   def finalizeGenerator(): Unit = {}
@@ -218,6 +255,7 @@ trait BaseGraalIRGen extends NestedBlockTraversal {
     throw new GenerationFailedException("don't know how to generate code for: " + rhs)
   }
 
+  /* until the api stabilizes
   def emit[T : Manifest, R : Manifest](f: Exp[T] => Exp[R]): List[(Sym[Any], Any)] = {
     val s = fresh[T]
     val body = reifyBlock(f(s))
@@ -256,7 +294,7 @@ trait BaseGraalIRGen extends NestedBlockTraversal {
     val s5 = fresh[T5]
     val body = reifyBlock(f(s1, s2, s3, s4, s5))
     emit(List(s1, s2, s3, s4, s5), body)
-  }
+  }*/
 
   /**
    * @param args List of symbols bound to `body`
@@ -264,18 +302,7 @@ trait BaseGraalIRGen extends NestedBlockTraversal {
    * @param className Name of the generated identifier
    * @param stream Output stream
    */
-  def emit[A : Manifest](args: List[Sym[_]], body: Block[A]): List[(Sym[Any], Any)] // return free static data in block
-
-  def quote(x: Exp[Any]) : String = x match {
-    case Const(s: String) => ???
-    case Const(c: Char) => ???
-    case Const(f: Float) => ???
-    case Const(l: Long) => ???
-    case Const(null) => ???
-    case Const(z) => ???
-    case Sym(n) => ???
-    case _ => throw new RuntimeException("could not quote " + x)
-  }
+  def emit[A : Manifest](args: List[Sym[_]], body: Block[A], method: ResolvedJavaMethod): List[(Sym[Any], Any)]
 
   // ----------
 
@@ -305,13 +332,39 @@ trait BaseGraalIRGen extends NestedBlockTraversal {
 
 }
 
+trait GraalBuilder { self: GraalGenBase =>
+  import IR._
+  import graphBuilder._
 
+  val stack: ArrayBuffer[Sym[Any]] = new ArrayBuffer[Sym[Any]]
 
-trait GenericNestedCodegen extends NestedBlockTraversal with BaseGraalIRGen {
+  def push(c: Exp[Any]): Unit = c match {
+    case Const(v: Int) =>
+      c.tp.toString match {
+        case "Int" =>
+          frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
+      }
+    case sym@Sym(v) =>
+      val stackPos = lookup(sym) // get the table here
+      c.tp.toString match {
+        case "Int" =>
+          val loc = frameState.loadLocal(stackPos)
+          frameState.push(Kind.Int, loc)
+      }
+  }
+
+  def lookup(s: Sym[Any]): Int =
+    stack.indexOf(s) + 1 // + 1 for this
+
+  def insert(s: Sym[Any]): Unit =
+    if(!stack.contains(s)) stack += s
+}
+
+trait GenericNestedCodegen extends GraalGenBase with NestedBlockTraversal {
   val IR: Expressions with Effects
   import IR._
 
-  override def traverseStm(stm: Stm) = super[BaseGraalIRGen].traverseStm(stm)
+  override def traverseStm(stm: Stm) = super[GraalGenBase].traverseStm(stm)
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case Reflect(s, u, effects) =>

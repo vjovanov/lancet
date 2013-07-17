@@ -99,6 +99,7 @@ trait BytecodeInterpreter_LMS extends BaseBytecodeInterpreter_LMS { self =>
         val exp = new ExportGraph { val IR: self.type = self }
         println("dumping graph to: "+this.getClass.getName)
         exp.exportGraph(this.getClass.getName)(y.res)
+        exp.exportGraph(this.getClass.getName + "-lms")(reify{f(arg)}.res)
       }
 
 
@@ -118,44 +119,44 @@ trait BytecodeInterpreter_LMS extends BaseBytecodeInterpreter_LMS { self =>
     }
 }
 
-trait BytecodeInterpreter_LMS_Graal extends BaseBytecodeInterpreter_LMS { self =>
+// trait BytecodeInterpreter_LMS_Graal extends BaseBytecodeInterpreter_LMS { self =>
 
-  def createCodegen(): GEN_Graal_LMS { val IR: self.type } =
-      new GEN_Graal_LMS { val IR: self.type = self; }
+//   def createCodegen(): GEN_Graal_LMS { val IR: self.type } =
+//       new GEN_Graal_LMS { val IR: self.type = self; }
 
-  def lms0[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B] = {
+//   def lms0[A:Manifest,B:Manifest](f: Rep[A]=>Rep[B]): Fun[A,B] = {
 
-      implicit val tp = manifestToTypeRep(manifest[B])
-      val (maStr, mbStr) = (manifestStr(manifest[A]), manifestStr(manifest[B]))
+//       implicit val tp = manifestToTypeRep(manifest[B])
+//       val (maStr, mbStr) = (manifestStr(manifest[A]), manifestStr(manifest[B]))
 
-      val arg = fresh[A]
-      val y = reify {
-        f(arg)
-      }
+//       val arg = fresh[A]
+//       val y = reify {
+//         f(arg)
+//       }
 
-      val cst = VConstantPool
-      val codegen = createCodegen
-      codegen.emitBlock(y)
-      val comp = codegen.compile[A, B]((x: A) => ().asInstanceOf[B])
+//       val cst = VConstantPool
+//       val codegen = createCodegen
+//       codegen.emitBlock(y)
+//       val comp = codegen.compile[A, B]((x: A) => ().asInstanceOf[B])
 
-      if (debugGlobalDefs) globalDefs.foreach(println)
+//       if (debugGlobalDefs) globalDefs.foreach(println)
 
-      if (debugDepGraph) {
-        val exp = new ExportGraph { val IR: self.type = self }
-        println("dumping graph to: "+ this.getClass.getName)
-        exp.exportGraph(this.getClass.getName)(y.res)
-      }
+//       if (debugDepGraph) {
+//         val exp = new ExportGraph { val IR: self.type = self }
+//         println("dumping graph to: "+ this.getClass.getName)
+//         exp.exportGraph(this.getClass.getName)(y.res)
+//       }
 
-      val fun: Fun[A,B] = new Fun[A,B] {
-        def code = "Emitted directly to graal IR."
-        def compiled = this
-        def interpreted = ???
-        def inline = ???
-        def apply(x:A): B = comp(x)
-      }
-      fun
-    }
-}
+//       val fun: Fun[A,B] = new Fun[A,B] {
+//         def code = "Emitted directly to graal IR."
+//         def compiled = this
+//         def interpreted = ???
+//         def inline = ???
+//         def apply(x:A): B = comp(x)
+//       }
+//       fun
+//     }
+// }
 
 //@SuppressWarnings("static-method")
 trait BaseBytecodeInterpreter_LMS extends InterpreterUniverse_LMS with BytecodeInterpreter_Common_Compile { self =>

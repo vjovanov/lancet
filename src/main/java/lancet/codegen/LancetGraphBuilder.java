@@ -121,7 +121,7 @@ public class LancetGraphBuilder {
         assert runtime != null;
     }
 
-    protected void init(StructuredGraph graph) {
+    public void init(StructuredGraph graph) {
         method = graph.method();
         entryBCI = graph.getEntryBCI();
         profilingInfo = method.getProfilingInfo();
@@ -150,7 +150,7 @@ public class LancetGraphBuilder {
         return map;
     }
 
-    protected void finalize() {
+    public void finalize() {
         Debug.dump(currentGraph, "After Lancet IR generation");
 
         connectLoopEndToBegin();
