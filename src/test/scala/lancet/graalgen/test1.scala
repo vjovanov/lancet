@@ -89,10 +89,10 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
     withOutFile(prefix+"-if") {
       trait Prog extends DSL {
-        def main(x: Rep[Int]): Rep[Int] = if (x < 1) 0 else 42
+        def main(x: Rep[Int]): Rep[Int] = if (true) 0 else 42
       }
       val f = (new Prog with Impl).function
-      assert(f(1) == 42)
+      assert(f(1) == 0)
       assert(f(0) == 0)
     }
   }

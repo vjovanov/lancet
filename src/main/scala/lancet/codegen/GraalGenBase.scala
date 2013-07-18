@@ -57,11 +57,11 @@ import com.oracle.graal.api.meta._
 
 
 
-trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: GraalBuilder =>
+trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile { self: GraalBuilder =>
   val IR: Expressions with Effects
   import IR._
-
   import graphBuilder._
+
   /**
    * @param args List of symbols bound to `body`
    * @param body Block to emit
@@ -88,15 +88,12 @@ trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: Graal
 
     // LMS code generation
     emitBlock(body)
-
-
-    // return (TODO this needs to be more spohisticated)
-    loadLocal(lookup(body.res.asInstanceOf[Sym[Any]]), Kind.Int)
+    push(body.res) // push the block result for the return
 
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
 
-    val node = frameState.pop(Kind.Int) // TODO use the generic type
+    val node = frameState.pop(kind(body.res)) // TODO make an abstraction here with symbols
     frameState.clearStack();
     val retNode = new ReturnNode(node)
     graph.add(retNode)
@@ -106,7 +103,6 @@ trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: Graal
 
     staticData
   }
-
 }
 
 trait GraalCompile { self: GEN_Graal_LMS =>
@@ -338,19 +334,26 @@ trait GraalBuilder { self: GraalGenBase =>
 
   val stack: ArrayBuffer[Sym[Any]] = new ArrayBuffer[Sym[Any]]
 
+  def kind(e: Exp[Any]) = e.tp.toString match {
+    case "Boolean"=> Kind.Boolean
+    case "Byte"   => Kind.Byte
+    case "Char"   => Kind.Char
+    case "Short"  => Kind.Short
+    case "Int"    => Kind.Int
+    case "Long"   => Kind.Long
+    case "Float"  => Kind.Float
+    case "Double" => Kind.Double
+    case _ => Kind.Object
+  }
+
   def push(c: Exp[Any]): Unit = c match {
     case Const(v: Int) =>
-      c.tp.toString match {
-        case "Int" =>
-          frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
-      }
+      frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
+    case Const(v: Boolean) =>
+      frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
     case sym@Sym(v) =>
-      val stackPos = lookup(sym) // get the table here
-      c.tp.toString match {
-        case "Int" =>
-          val loc = frameState.loadLocal(stackPos)
-          frameState.push(Kind.Int, loc)
-      }
+      val loc = frameState.loadLocal(lookup(sym))
+      frameState.push(kind(sym), loc)
   }
 
   def lookup(s: Sym[Any]): Int =
@@ -360,7 +363,7 @@ trait GraalBuilder { self: GraalGenBase =>
     if(!stack.contains(s)) stack += s
 }
 
-trait GenericNestedCodegen extends GraalGenBase with NestedBlockTraversal {
+trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal {
   val IR: Expressions with Effects
   import IR._
 
