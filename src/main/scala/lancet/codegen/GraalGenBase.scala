@@ -23,9 +23,10 @@
 package lancet.codegen
 
 import scala.virtualization.lms.util.GraphUtil
+import scala.virtualization.lms.common._
 import java.io.{File, PrintWriter}
 import scala.reflect.RefinedManifest
-import scala.collection.mutable.{Map => MMap, ArrayBuffer}
+import scala.collection.mutable.{HashMap => MHashMap, Map => MMap, ArrayBuffer}
 import scala.virtualization.lms.internal._
 import lancet.core._
 
@@ -57,10 +58,12 @@ import com.oracle.graal.api.meta._
 
 
 
-trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile { self: GraalBuilder =>
+trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGraph { self: GraalBuilder =>
   val IR: Expressions with Effects
   import IR._
   import graphBuilder._
+
+  var debugDepGraph = true
 
   /**
    * @param args List of symbols bound to `body`
@@ -69,6 +72,11 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile { self: GraalBu
    * @param stream Output stream
    */
   def emit[A : Manifest](args: List[Sym[_]], body: Block[A], method: ResolvedJavaMethod): List[(Sym[Any], Any)] = {
+    if (debugDepGraph) {
+      println("dumping graph to: "+this.getClass.getName)
+      exportGraph(this.getClass.getName + "-lms")(body.res)
+    }
+
     val staticData = getFreeDataBlock(body)
 
     // initialize the stack with function arguments
@@ -128,10 +136,9 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       Debug.dump(graph, "Constructed")
       new DeadCodeEliminationPhase().apply(graph)
       Debug.dump(graph, "Constructed DCE")
-      new ConditionalEliminationPhase(runtime).apply(graph)
-      Debug.dump(graph, "Constructed CE")
       // Building how the graph should look like
       val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
+
       println("To debug use:")
       println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
       println("Method " + method)
@@ -339,9 +346,14 @@ trait GraalBuilder { self: GraalGenBase =>
   import IR._
   import graphBuilder._
 
-  val stack: ArrayBuffer[Sym[Any]] = new ArrayBuffer[Sym[Any]]
+  val stackPos: MMap[Sym[Any], Int] = new MHashMap()
 
-  def kind(e: Exp[Any]) = e.tp.toString match {
+  def kind(e: Exp[Any]): Kind = e match {
+    case _ if e.tp.erasure == classOf[Variable[Any]] => kind(e.tp.typeArguments.head.toString)
+    case _ => kind(e.tp.toString)
+  }
+
+  def kind(e: String): Kind = e match {
     case "Boolean"=> Kind.Boolean
     case "Byte"   => Kind.Byte
     case "Char"   => Kind.Char
@@ -350,7 +362,7 @@ trait GraalBuilder { self: GraalGenBase =>
     case "Long"   => Kind.Long
     case "Float"  => Kind.Float
     case "Double" => Kind.Double
-    case _ => Kind.Object
+    case _ =>  throw new Exception(e);
   }
 
   def push(c: Exp[Any]): Unit = c match {
@@ -360,24 +372,28 @@ trait GraalBuilder { self: GraalGenBase =>
       frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
     case sym@Sym(v) =>
       val loc = frameState.loadLocal(lookup(sym))
-      Predef.println(loc)
       frameState.push(kind(sym), loc)
   }
 
-  def lookup(s: Sym[Any]): Int =
-    stack.indexOf(s) + 1 // + 1 for this
+  def lookup(s: Sym[Any]): Int = {
+    assert(stackPos.contains(s), "Symbol used before its definition.")
+    stackPos(s)
+  }
 
-  def insert(s: Sym[Any]): Unit =
-    if(!stack.contains(s)) stack += s
+  def insert(s: Sym[Any], pos: Int): Unit =
+    if(!stackPos.contains(s)) stackPos += (s -> pos)
+
+  def insert(s: Sym[Any]): Unit = insert(s, stackPos.size + 1)
 
   def clearLocals(fs: FrameStateBuilder, locals: Int*) = {
     val removeLocals = new BitSet()
     locals.foreach(removeLocals.set(_))
-    fs.clearNonLiveLocals(removeLocals);
+    fs.clearNonLiveLocals(removeLocals)
   }
+
 }
 
-trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal {
+trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal with GraalBuilder {
   val IR: Expressions with Effects
   import IR._
 
@@ -389,6 +405,13 @@ trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal {
     case Reify(s, u, effects) =>
       // just ignore -- effects are accounted for in emitBlock
     case _ => super.emitNode(sym, rhs)
+  }
+
+  /* TODO Not sure this is smart */
+  override def push(c: Exp[Any]): Unit = c match {
+    case Def(Reify(s, u, effects)) =>
+      push(s)
+    case _ => super.push(c)
   }
 
 }
