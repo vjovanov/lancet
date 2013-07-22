@@ -36,9 +36,14 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
 //    case ObjIntMinValue() => emitValDef(sym, "scala.Int.MinValue")
     case IntPlus(lhs,rhs) =>
       insert(sym)
+      // TODO make an abstraction over of this sequence
       push(rhs)
       push(lhs)
-      frameState.push(Kind.Int, graph.unique(new IntegerAddNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int))))
+      val addLhs = frameState.pop(Kind.Int)
+      val addRhs = frameState.pop(Kind.Int)
+      assert(addLhs != null
+            && addRhs != null, "Popped state must be initialized.")
+      frameState.push(Kind.Int, graph.unique(new IntegerAddNode(Kind.Int, addLhs, addRhs)))
       storeLocal(Kind.Int, lookup(sym))
     case IntMinus(lhs,rhs) =>
       insert(sym)

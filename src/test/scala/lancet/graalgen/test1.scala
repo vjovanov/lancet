@@ -38,13 +38,19 @@ trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPr
 }
 
 trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp { self =>
-    val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps { val IR: self.type = self
+    def params(i: Int, b: Int, c: Int) = ???
+    val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse with GraalGenOrderingOps { val IR: self.type = self
       val f = (x: Int) => { // TODO this is needed for now to trick the FrameStateBuilder.
         val tmp = x
         val tmp1 = tmp + 1
         val tmp2 = tmp1 + 1
         val tmp3 = tmp2 + 1
-        tmp3
+        val tmp4 = tmp3 + 1
+        val tmp5 = tmp4 + 1
+        val tmp6 = tmp5 + 1
+        val tmp7 = tmp6 + 1
+        params(tmp5,tmp4,tmp3)
+        tmp7
       }
       val input = fresh[Int]
       val cls = f.getClass
@@ -89,11 +95,31 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
     withOutFile(prefix+"-if") {
       trait Prog extends DSL {
-        def main(x: Rep[Int]): Rep[Int] = if (true) 0 else 42
+        def main(x: Rep[Int]): Rep[Int] = if (x < 0) x + 42 else x - 42
       }
       val f = (new Prog with Impl).function
-      assert(f(1) == 0)
-      assert(f(0) == 0)
+      assert(f(-42) == 0)
+      assert(f(42) == 0)
+      assert(f(0) == 42)
+    }
+  }
+
+  def testNestedIf = withOutFileChecked(prefix+"-nestedif") {
+
+    withOutFile(prefix+"-nestedif") {
+      trait Prog extends DSL {
+        def main(x: Rep[Int]): Rep[Int] =
+          if (x < 00)
+            if(x < -10) -11 else -12
+          else
+            if (x > 20) x - 22 else x - 21
+      }
+      val f = (new Prog with Impl).function
+      assert(f(-43) == -11)
+      assert(f(-0) == -12)
+      assert(f(19) == -2)
+      assert(f(21) == -1)
+      assert(f(42) == 20)
     }
   }
 

@@ -17,6 +17,7 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
       frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
          insert(sym)
          push(c)
+         println("FS: " + frameState)
          val (thn, els) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true)
          val frameStateThen = frameState.copy()
          val frameStateElse = frameState.copy()
@@ -26,7 +27,9 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
          frameState = frameStateThen
 
          emitBlock(a)
-         push(b.res) // for the return value
+         push(a.res) // for the return value
+         storeLocal(kind(sym), lookup(sym))
+
 
          // appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
          var exitState = frameState.copy()
@@ -39,9 +42,10 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
          // else
          lastInstr = els
          frameState = frameStateElse
-
+         // TODO clear the locals not specific to this state
          emitBlock(b)
          push(b.res) // for the return value
+         storeLocal(kind(sym), lookup(sym))
 
          // The EndNode for the already existing edge.
          val end = currentGraph.add(new EndNode());
@@ -66,7 +70,6 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
          lastInstr = mergeNode
          mergeNode.setStateAfter(frameState.create(0))
 
-         storeLocal(Kind.Int, lookup(sym))
     case _ => super.emitNode(sym, rhs)
   }
 }

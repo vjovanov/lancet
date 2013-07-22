@@ -125,10 +125,16 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     plan.addPhase(PhasePosition.MID_LEVEL, printGraph("MID_LEVEL"))
 
     val result = topScope(method) {
-
+      Debug.dump(graph, "Constructed")
+      new DeadCodeEliminationPhase().apply(graph)
+      Debug.dump(graph, "Constructed DCE")
+      new ConditionalEliminationPhase(runtime).apply(graph)
+      Debug.dump(graph, "Constructed CE")
       // Building how the graph should look like
       val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
+      println("To debug use:")
       println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
+      println("Method " + method)
       println("===== DONE")
 
       res
@@ -155,7 +161,8 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        System.out,
        List(new GraphPrinterDumpHandler())
       )
-
+    println("GraalOptions.Dump         = " + GraalOptions.Dump)
+    println("GraalOptions.MethodFilter = " + GraalOptions.MethodFilter)
     Debug.setConfig(hotspotDebugConfig)
     Debug.scope("LMS", method, new Callable[A] {
         def call: A = {
@@ -353,6 +360,7 @@ trait GraalBuilder { self: GraalGenBase =>
       frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
     case sym@Sym(v) =>
       val loc = frameState.loadLocal(lookup(sym))
+      Predef.println(loc)
       frameState.push(kind(sym), loc)
   }
 
@@ -361,6 +369,12 @@ trait GraalBuilder { self: GraalGenBase =>
 
   def insert(s: Sym[Any]): Unit =
     if(!stack.contains(s)) stack += s
+
+  def clearLocals(fs: FrameStateBuilder, locals: Int*) = {
+    val removeLocals = new BitSet()
+    locals.foreach(removeLocals.set(_))
+    fs.clearNonLiveLocals(removeLocals);
+  }
 }
 
 trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal {
