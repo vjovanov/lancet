@@ -17,7 +17,6 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case OrderingLT(a,b)    =>
 
-      Predef.println("failing symbol: " + b)
       // TODO make an abstraction for the if construct
       insert(sym)
       push(a)
@@ -26,9 +25,7 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
       val rhs = frameState.pop(kind(b))
       assert(rhs != null)
       assert(lhs != null)
-      Predef.println("lhs: " + lhs)
-      Predef.println("rhs: " + rhs)
-      val (thn, els) = ifNode(lhs, Condition.LT, rhs, true)
+      val (thn, els) = ifNode(lhs, Condition.LT, rhs, true, null)
       val frameStateThen = frameState.copy()
       val frameStateElse = frameState.copy()
       // then
@@ -84,7 +81,7 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
       insert(sym)
       push(a)
       push(b)
-      val (thn, els) = ifNode(frameState.pop(kind(a)), Condition.GT, frameState.pop(kind(b)), true)
+      val (thn, els) = ifNode(frameState.pop(kind(a)), Condition.GT, frameState.pop(kind(b)), true, null)
       val frameStateThen = frameState.copy()
       val frameStateElse = frameState.copy()
       // then

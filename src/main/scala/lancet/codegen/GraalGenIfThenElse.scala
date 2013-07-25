@@ -18,7 +18,7 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
          insert(sym)
          push(c)
          println("FS: " + frameState)
-         val (thn, els) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true)
+         val (thn, els) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, null)
          val frameStateThen = frameState.copy()
          val frameStateElse = frameState.copy()
          // then

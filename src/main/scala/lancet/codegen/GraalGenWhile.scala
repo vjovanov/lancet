@@ -13,6 +13,15 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case While(c,b) =>
+         /* TODO this should be here only if it is the first block
+         val nextFirstInstruction = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode());
+         val target = new LancetGraphBuilder.Target(nextFirstInstruction, frameState);
+         val result = target.fixed;
+         val tmpState = frameState.copy()
+         appendGoto(result)
+         frameState = tmpState
+         lastInstr = nextFirstInstruction*/
+
          // Loop
          // starting the loop block
          val preLoopEnd = currentGraph.add(new EndNode())
@@ -34,24 +43,24 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
          // values for
          // phi functions, so make a copy of it.
          val loopBlockState = frameState.copy() // why is this not used
-
+         frameState = loopBlockState
          // emit the conditional
          emitBlock(c)
          push(c.res)
-
-         val (thn, els) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true);
-         val frameStateThen = frameState.copy()
-         val frameStateElse = frameState.copy()
+         // push(Const(1))
+         val (thn, els) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, (loopFristInstr, loopBlockState));
+         val frameStateThen = frameState//.copy() // when should you do a state copy?
+         val frameStateElse = frameState.copy() //this is a loop exit
 
          // starting the then block
          val entryState = frameState
-         frameState = loopBlockState // should the loop block state go here?
-         lastInstr = thn
+         frameState = frameStateElse //loopBlockState
+         lastInstr = els
 
          // emit loop block
          emitBlock(b)
 
-         // 17:  goto  4
+         // jump to the loop beginning
          appendGoto({
            val target = new LancetGraphBuilder.Target(currentGraph.add(new LoopEndNode(loopBegin)), frameState);
            val result1 = target.fixed;
@@ -59,8 +68,8 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
            result1
          })
          // else block (after loop)
-         lastInstr = els
-         frameState = frameStateElse
+         lastInstr = thn
+         frameState = frameStateThen
     case _ => super.emitNode(sym, rhs)
   }
 }

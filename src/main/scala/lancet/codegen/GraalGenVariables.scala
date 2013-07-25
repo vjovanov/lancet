@@ -17,23 +17,16 @@ trait GraalGenVariables extends GraalNestedCodegen with GraalBuilder {
       insert(sym)
       push(c)
       storeLocal(kind(sym), lookup(sym))
-      Predef.println("ass:" + kind(sym))
-      Predef.println(lookup(sym))
     case ReadVar(Variable(a)) =>
       insert(sym, lookup(a.asInstanceOf[Sym[Any]])) // alias stack position
       push(a)
       storeLocal(kind(a), lookup(sym))
-      Predef.println("read" + a + ":" + kind(a))
-      Predef.println(lookup(sym))
     case VarPlusEquals(Variable(a), b) =>
       push(a)
       push(b)
       // TODO polymorphic addition. Maybe even a method call???
       frameState.push(Kind.Int, graph.unique(new IntegerAddNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int))))
-      Predef.println(kind(a) + " + " + kind(b))
-      Predef.println(lookup(a.asInstanceOf[Sym[Any]]))
       storeLocal(kind(a), lookup(a.asInstanceOf[Sym[Any]]))
-
     case Assign(Variable(a), b) =>
       push(b)
       storeLocal(kind(a), lookup(a.asInstanceOf[Sym[Any]]))

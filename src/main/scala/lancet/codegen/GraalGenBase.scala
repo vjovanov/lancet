@@ -85,19 +85,18 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
     graphBuilder.init(new StructuredGraph(method))
     // Construction
     lastInstr = graph.start()
-    // TODO we will need the minimum tracking of live variables in blocks
-    // var removeLocals = new BitSet()
-    // frameState.clearNonLiveLocals(removeLocals)
+    // TODO we might need the minimum tracking of live variables in blocks
+    //clearLocals(frameState)()
     // finish the start block
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0));
 
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
-
+    clearLocals(frameState)(1)
     // LMS code generation
     emitBlock(body)
     push(body.res) // push the block result for the return
-
+    clearLocals(frameState)(1)
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
 
@@ -128,20 +127,20 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     val method = runtime.lookupJavaMethod(reflectMeth)
 
     val plan = new PhasePlan()
-    plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
-    plan.addPhase(PhasePosition.HIGH_LEVEL, printGraph("HIGH_LEVEL"))
-    plan.addPhase(PhasePosition.MID_LEVEL, printGraph("MID_LEVEL"))
+    // plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
+    plan.addPhase(PhasePosition.AFTER_PARSING, printGraphPhase("AFTER_PARSING"))
+    plan.addPhase(PhasePosition.HIGH_LEVEL, printGraphPhase("HIGH_LEVEL"))
+    plan.addPhase(PhasePosition.MID_LEVEL, printGraphPhase("MID_LEVEL"))
 
     val result = topScope(method) {
-      Debug.dump(graph, "Constructed")
-      new DeadCodeEliminationPhase().apply(graph)
-      Debug.dump(graph, "Constructed DCE")
-      // Building how the graph should look like
-      val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
-
       println("To debug use:")
       println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
       println("Method " + method)
+      Debug.dump(graph, "Generated")
+
+      // Building how the graph should look like
+      val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
+
       println("===== DONE")
 
       res
@@ -158,13 +157,13 @@ trait GraalCompile { self: GEN_Graal_LMS =>
   // --------- Util
 
   def topScope[A](method: ResolvedJavaMethod)(body: => A) = {
-    //val hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log + ",Escape", GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, System.out)
+
     val hotspotDebugConfig =
       new GraalDebugConfig(GraalOptions.Log,
        GraalOptions.Meter,
        GraalOptions.Time,
        GraalOptions.Dump,
-       GraalOptions.MethodFilter,
+       "Impl$$anon$8$$anonfun$1.apply$mcII$sp",
        System.out,
        List(new GraphPrinterDumpHandler())
       )
@@ -178,12 +177,15 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     });
   }
 
-  def printGraph(s: String, verbosity: Node.Verbosity = Node.Verbosity.Short) = phase { graph =>
+  def printGraphPhase(s: String, verbosity: Node.Verbosity = Node.Verbosity.Short) = phase { graph =>
     println("===== " + s)
     graph.getNodes.foreach(n => println(n.toString(verbosity) + n.inputs().map(_.toString(Node.Verbosity.Id)).mkString("(",",",")")))
     println("----- " + s + " method calls ")
     graph.getNodes(classOf[InvokeNode]).foreach(printInvoke)
   }
+
+  def printGraph(s: String, verbosity: Node.Verbosity = Node.Verbosity.Short) =
+    graph.getNodes.foreach(n => println(n.toString(Node.Verbosity.Debugger) + n.inputs().map(_.toString(Node.Verbosity.Id)).mkString("(",",",")")))
 
   def printInvoke(invoke: InvokeNode): Unit = {
     val methodCallTarget = invoke.methodCallTarget()
@@ -385,7 +387,7 @@ trait GraalBuilder { self: GraalGenBase =>
 
   def insert(s: Sym[Any]): Unit = insert(s, stackPos.size + 1)
 
-  def clearLocals(fs: FrameStateBuilder, locals: Int*) = {
+  def clearLocals(fs: FrameStateBuilder)(locals: Int*) = {
     val removeLocals = new BitSet()
     locals.foreach(removeLocals.set(_))
     fs.clearNonLiveLocals(removeLocals)

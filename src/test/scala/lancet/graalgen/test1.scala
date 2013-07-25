@@ -50,8 +50,14 @@ trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with
         val tmp6 = tmp5 + 1
         val tmp7 = tmp6 + 1
         val tmp8 = tmp7 + 1
+        val tmp9 = tmp8 + 1
+        val tmp10 = tmp9 + 1
+        val tmp11 = tmp10 + 1
+        val tmp12 = tmp11 + 1
+        val tmp13 = tmp12 + 1
+        val tmp14 = tmp13 + 1
         params(tmp5,tmp4,tmp3)
-        tmp7
+        tmp14
       }
       val input = fresh[Int]
       val cls = f.getClass
@@ -78,7 +84,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
   val prefix = "test-out/test-graalgen-basic"
 
   // interpret
-  /*def testInc = withOutFileChecked(prefix+"-inc") {
+  def testInc = withOutFileChecked(prefix+"-inc") {
 
     withOutFile(prefix+"-inc") {
       trait Prog extends DSL {
@@ -122,7 +128,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
       assert(f(21) == -1)
       assert(f(42) == 20)
     }
-  }*/
+  }
 
   def testWhile = withOutFileChecked(prefix+"-while") {
 
@@ -131,12 +137,56 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
         def main(x: Rep[Int]): Rep[Int] = {
           var sum = 0
           var i = 0
-          val res = while (i < x) {
+          val res = while (i < 100) {
             sum = sum + i
             i = i + 1
             ()
           }
           sum
+        }
+      }
+      val f = (new Prog with Impl).function
+      (0 to 100) foreach { x => println(f(x)) }
+      // (0 to 100) foreach { x => assert(f(x) == (x * (x + 1) / 2)) }
+    }
+  }
+
+  def testNestedWhile = withOutFileChecked(prefix+"-nestedwhile") {
+    withOutFile(prefix+"-nestedwhile") {
+      trait Prog extends DSL {
+        def main(x: Rep[Int]): Rep[Int] = {
+          var sum = 0
+          var i = 0
+          var j = 0
+          while (i < 50) {
+            while(j < 50) {
+              sum = sum + j
+              j = j + 1
+            }
+            i = i + 1
+          }
+          sum
+        }
+      }
+      val f = (new Prog with Impl).function
+      (0 to 100) foreach { x => Predef.println(f(x)) }
+      // (0 to 100) foreach { x => assert(f(x) == (x * (x + 1) / 2)) }
+    }
+  }
+
+  def testArrays = withOutFileChecked(prefix+"-while") {
+
+    withOutFile(prefix+"-while") {
+      trait Prog extends DSL {
+        def main(x: Rep[Int]): Rep[Int] = {
+          var arr: Rep[Array[Int]] = NewArray[Int](100)
+          var i = 0
+          val res = while (i < 100) {
+            arr(i) = x
+            i = i + 1
+            ()
+          }
+          x
         }
       }
       val f = (new Prog with Impl).function

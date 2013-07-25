@@ -512,7 +512,13 @@ public class LancetGraphBuilder {
         appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
         assert currentBlock.numNormalSuccessors() == 1;
     }
-    protected scala.Tuple2<FixedWithNextNode, FixedWithNextNode> ifNode(ValueNode x, Condition cond, ValueNode y, Boolean elseExists) {
+    protected scala.Tuple2<FixedWithNextNode, FixedWithNextNode> ifNode(
+        ValueNode x,
+        Condition cond,
+        ValueNode y,
+        Boolean elseExists,
+        scala.Tuple2<LoopBeginNode, FrameStateBuilder> loop
+        ) {
         assert !x.isDeleted() && !y.isDeleted();
         if (!elseExists) { // in args (createTarget)
             // appendGoto(createTarget(trueBlock, frameState));
@@ -543,8 +549,24 @@ public class LancetGraphBuilder {
         }
         condition = currentGraph.unique(condition);
 
-        FixedWithNextNode thn = currentGraph.add(new BlockPlaceholderNode());
-        FixedNode target = new Target(thn, frameState).fixed;
+        FixedWithNextNode thn = null;
+        FixedNode target = null;
+        if (loop != null) { // This is for loops. Current solution as the then branch exits the loop.
+          FixedWithNextNode exitBlockInstr = currentGraph.add(new BlockPlaceholderNode());
+          FrameStateBuilder newState = frameState.copy();
+          LoopBeginNode loopBegin = (LoopBeginNode) loop._1;
+          LoopExitNode loopExit = currentGraph.add(new LoopExitNode(loopBegin));
+          newState.insertLoopProxies(loopExit, loop._2);
+          loopExit.setStateAfter(newState.create(0));
+          loopExit.setNext(exitBlockInstr);
+          thn = exitBlockInstr;
+          target = new Target(loopExit, newState).fixed;
+        } else {
+          thn = currentGraph.add(new BlockPlaceholderNode());
+          target = new Target(thn, frameState).fixed;
+        }
+
+        // Inline the loop target
         BeginNode trueSuccessor = BeginNode.begin(target);
 
         FixedWithNextNode els = currentGraph.add(new BlockPlaceholderNode());
@@ -555,6 +577,7 @@ public class LancetGraphBuilder {
         append(currentGraph.add(ifNode));
         return new scala.Tuple2<FixedWithNextNode, FixedWithNextNode>(thn, els);
     }
+
 
     private void ifNode(ValueNode x, Condition cond, ValueNode y) {
         assert !x.isDeleted() && !y.isDeleted();
