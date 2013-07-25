@@ -520,7 +520,6 @@ public class LancetGraphBuilder {
             // return;
         }
 
-        // Maybe this can be used with the cost models???
         double probability = 0.5;
 
         // the mirroring and negation operations get the condition into canonical form

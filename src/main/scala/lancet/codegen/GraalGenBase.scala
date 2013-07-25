@@ -23,9 +23,10 @@
 package lancet.codegen
 
 import scala.virtualization.lms.util.GraphUtil
+import scala.virtualization.lms.common._
 import java.io.{File, PrintWriter}
 import scala.reflect.RefinedManifest
-import scala.collection.mutable.{Map => MMap, ArrayBuffer}
+import scala.collection.mutable.{HashMap => MHashMap, Map => MMap, ArrayBuffer}
 import scala.virtualization.lms.internal._
 import lancet.core._
 
@@ -57,11 +58,13 @@ import com.oracle.graal.api.meta._
 
 
 
-trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: GraalBuilder =>
+trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGraph { self: GraalBuilder =>
   val IR: Expressions with Effects
   import IR._
-
   import graphBuilder._
+
+  var debugDepGraph = true
+
   /**
    * @param args List of symbols bound to `body`
    * @param body Block to emit
@@ -69,6 +72,11 @@ trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: Graal
    * @param stream Output stream
    */
   def emit[A : Manifest](args: List[Sym[_]], body: Block[A], method: ResolvedJavaMethod): List[(Sym[Any], Any)] = {
+    if (debugDepGraph) {
+      println("dumping graph to: "+this.getClass.getName)
+      exportGraph(this.getClass.getName + "-lms")(body.res)
+    }
+
     val staticData = getFreeDataBlock(body)
 
     // initialize the stack with function arguments
@@ -88,15 +96,12 @@ trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: Graal
 
     // LMS code generation
     emitBlock(body)
-
-
-    // return (TODO this needs to be more spohisticated)
-    loadLocal(lookup(body.res.asInstanceOf[Sym[Any]]), Kind.Int)
+    push(body.res) // push the block result for the return
 
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
 
-    val node = frameState.pop(Kind.Int) // TODO use the generic type
+    val node = frameState.pop(kind(body.res)) // TODO make an abstraction here with symbols
     frameState.clearStack();
     val retNode = new ReturnNode(node)
     graph.add(retNode)
@@ -106,7 +111,6 @@ trait GEN_Graal_LMS extends GenericNestedCodegen with GraalCompile { self: Graal
 
     staticData
   }
-
 }
 
 trait GraalCompile { self: GEN_Graal_LMS =>
@@ -129,10 +133,15 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     plan.addPhase(PhasePosition.MID_LEVEL, printGraph("MID_LEVEL"))
 
     val result = topScope(method) {
-
+      Debug.dump(graph, "Constructed")
+      new DeadCodeEliminationPhase().apply(graph)
+      Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
       val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
+
+      println("To debug use:")
       println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
+      println("Method " + method)
       println("===== DONE")
 
       res
@@ -159,7 +168,8 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        System.out,
        List(new GraphPrinterDumpHandler())
       )
-
+    println("GraalOptions.Dump         = " + GraalOptions.Dump)
+    println("GraalOptions.MethodFilter = " + GraalOptions.MethodFilter)
     Debug.setConfig(hotspotDebugConfig)
     Debug.scope("LMS", method, new Callable[A] {
         def call: A = {
@@ -336,31 +346,54 @@ trait GraalBuilder { self: GraalGenBase =>
   import IR._
   import graphBuilder._
 
-  val stack: ArrayBuffer[Sym[Any]] = new ArrayBuffer[Sym[Any]]
+  val stackPos: MMap[Sym[Any], Int] = new MHashMap()
+
+  def kind(e: Exp[Any]): Kind = e match {
+    case _ if e.tp.erasure == classOf[Variable[Any]] => kind(e.tp.typeArguments.head.toString)
+    case _ => kind(e.tp.toString)
+  }
+
+  def kind(e: String): Kind = e match {
+    case "Boolean"=> Kind.Boolean
+    case "Byte"   => Kind.Byte
+    case "Char"   => Kind.Char
+    case "Short"  => Kind.Short
+    case "Int"    => Kind.Int
+    case "Long"   => Kind.Long
+    case "Float"  => Kind.Float
+    case "Double" => Kind.Double
+    case _ =>  throw new Exception(e);
+  }
 
   def push(c: Exp[Any]): Unit = c match {
     case Const(v: Int) =>
-      c.tp.toString match {
-        case "Int" =>
-          frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
-      }
+      frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
+    case Const(v: Boolean) =>
+      frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
     case sym@Sym(v) =>
-      val stackPos = lookup(sym) // get the table here
-      c.tp.toString match {
-        case "Int" =>
-          val loc = frameState.loadLocal(stackPos)
-          frameState.push(Kind.Int, loc)
-      }
+      val loc = frameState.loadLocal(lookup(sym))
+      frameState.push(kind(sym), loc)
   }
 
-  def lookup(s: Sym[Any]): Int =
-    stack.indexOf(s) + 1 // + 1 for this
+  def lookup(s: Sym[Any]): Int = {
+    assert(stackPos.contains(s), "Symbol used before its definition.")
+    stackPos(s)
+  }
 
-  def insert(s: Sym[Any]): Unit =
-    if(!stack.contains(s)) stack += s
+  def insert(s: Sym[Any], pos: Int): Unit =
+    if(!stackPos.contains(s)) stackPos += (s -> pos)
+
+  def insert(s: Sym[Any]): Unit = insert(s, stackPos.size + 1)
+
+  def clearLocals(fs: FrameStateBuilder, locals: Int*) = {
+    val removeLocals = new BitSet()
+    locals.foreach(removeLocals.set(_))
+    fs.clearNonLiveLocals(removeLocals)
+  }
+
 }
 
-trait GenericNestedCodegen extends GraalGenBase with NestedBlockTraversal {
+trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal with GraalBuilder {
   val IR: Expressions with Effects
   import IR._
 
@@ -372,6 +405,13 @@ trait GenericNestedCodegen extends GraalGenBase with NestedBlockTraversal {
     case Reify(s, u, effects) =>
       // just ignore -- effects are accounted for in emitBlock
     case _ => super.emitNode(sym, rhs)
+  }
+
+  /* TODO Not sure this is smart */
+  override def push(c: Exp[Any]): Unit = c match {
+    case Def(Reify(s, u, effects)) =>
+      push(s)
+    case _ => super.push(c)
   }
 
 }
