@@ -1,5 +1,19 @@
-export JAVA_HOME=~/graalvm/jdk1.7.0-ea/product
+#!/bin/bash -x
+if [ -n "$DEBUG" ]; 
+then
+  export JAVA_HOME=$GRAAL_HOME/jdk1.7.0_10/fastdebug/
+else
+  export JAVA_HOME=$GRAAL_HOME/jdk1.7.0_10/product/
+fi
 
-$JAVA_HOME/bin/java -graal \
--Xms512M -Xmx1G -XX:MaxPermSize=512M -XX:+CMSClassUnloadingEnabled \
--jar ~/sbt/sbt-launch.jar "$@"
+export JAVA_OPTS="-graal -Ddelite.home.dir=~/work/research/code/virt/Delite"
+
+DUMP=""
+DEBUGGER=""
+[ -n "$DEBUG" ] && DEBUGGER="-Xdebug -Xrunjdwp:transport=dt_socket,address=127.0.0.1:8000,server=y,suspend=n"
+
+[ -n "$METHOD_FILTER" ] &&  DUMP="-G:Dump=LMS -G:MethodFilter=$METHOD_FILTER"
+
+$JAVA_HOME/bin/java -graal  -XX:+BootstrapGraal $DUMP $DEBUGGER \
+-Xms512M -Xmx2G -XX:MaxPermSize=512M -XX:+CMSClassUnloadingEnabled \
+-jar ~/bin/sbt-launch12.jar "$@"
