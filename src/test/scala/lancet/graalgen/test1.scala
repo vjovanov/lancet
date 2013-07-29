@@ -39,8 +39,8 @@ trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPr
 
 trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp { self =>
     def params(i: Int, b: Int, c: Int) = ???
-    val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile { val IR: self.type = self
-      val f = (x: Int) => { // TODO this is needed for now to trick the FrameStateBuilder.
+    val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps { val IR: self.type = self
+      val f = (x: Int) => { 
         val tmp = x
         val tmp1 = tmp + 1
         val tmp2 = tmp1 + 1
@@ -77,8 +77,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-basic"
 
-  // interpret
-  /*def testInc = withOutFileChecked(prefix+"-inc") {
+  def testInc = withOutFileChecked(prefix+"-inc") {
 
     withOutFile(prefix+"-inc") {
       trait Prog extends DSL {
@@ -122,7 +121,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
       assert(f(21) == -1)
       assert(f(42) == 20)
     }
-  }*/
+  }
 
   def testWhile = withOutFileChecked(prefix+"-while") {
 
@@ -141,6 +140,29 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
       }
       val f = (new Prog with Impl).function
       (0 to 100) foreach { x => assert(f(x) == (x * (x + 1) / 2)) }
+    }
+  }
+
+  def testArrays = withOutFileChecked(prefix+"-arrays") {
+
+    withOutFile(prefix+"-arrays") {
+      trait Prog extends DSL {
+        def main(x: Rep[Int]): Rep[Int] = {
+          val filled = NewArray[Int](x)
+          // filled(1)
+          // hotspot aborts the compilation for some reason
+          // var i = 0
+          // val res = while (i < filled.length) {
+          //   filled(i) = x
+          //   i = i + 1
+          //   ()
+          // }
+          // filled(x - 1)
+          filled.length                   
+        }
+      }
+      val f = (new Prog with Impl).function
+      (0 to 10) foreach { x => assert(f(x) == x) }
     }
   }
 

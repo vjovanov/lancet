@@ -133,15 +133,16 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     plan.addPhase(PhasePosition.MID_LEVEL, printGraph("MID_LEVEL"))
 
     val result = topScope(method) {
+      println("To debug use:")
+      println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
+      println("Method " + method)
+      
       Debug.dump(graph, "Constructed")
       new DeadCodeEliminationPhase().apply(graph)
       Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
       val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
-
-      println("To debug use:")
-      println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
-      println("Method " + method)
+     
       println("===== DONE")
 
       res
@@ -164,7 +165,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        GraalOptions.Meter,
        GraalOptions.Time,
        GraalOptions.Dump,
-       GraalOptions.MethodFilter,
+       "Impl$$anon$7$$anonfun$1.apply$mcII$sp",
        System.out,
        List(new GraphPrinterDumpHandler())
       )
@@ -362,7 +363,7 @@ trait GraalBuilder { self: GraalGenBase =>
     case "Long"   => Kind.Long
     case "Float"  => Kind.Float
     case "Double" => Kind.Double
-    case _ =>  throw new Exception(e);
+    case _ =>  Kind.Object
   }
 
   def push(c: Exp[Any]): Unit = c match {

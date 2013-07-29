@@ -270,7 +270,7 @@ public class LancetGraphBuilder {
         }
     }
 
-    private void genLoadIndexed(Kind kind) {
+    public void genLoadIndexed(Kind kind) {
         emitExplicitExceptions(frameState.peek(1), frameState.peek(0));
 
         ValueNode index = frameState.ipop();
@@ -279,7 +279,7 @@ public class LancetGraphBuilder {
         frameState.push(kind.getStackKind(), v);
     }
 
-    private void genStoreIndexed(Kind kind) {
+    public void genStoreIndexed(Kind kind) {
         emitExplicitExceptions(frameState.peek(2), frameState.peek(1));
 
         ValueNode value = frameState.pop(kind.getStackKind());
@@ -759,7 +759,7 @@ public class LancetGraphBuilder {
         // Checkstyle: resume
     }
 
-    private void genNewPrimitiveArray(int typeCode) {
+    public void genNewPrimitiveArray(int typeCode) {
         Class<?> clazz = arrayTypeCodeToClass(typeCode);
         ResolvedJavaType elementType = runtime.lookupJavaType(clazz);
         NewArrayNode nta = currentGraph.add(new NewArrayNode(elementType, frameState.ipop(), true, false));
@@ -1899,7 +1899,7 @@ public class LancetGraphBuilder {
         }
     }
 
-    private void genArrayLength() {
+    public void genArrayLength() {
         frameState.ipush(append(currentGraph.add(new ArrayLengthNode(frameState.apop()))));
     }
 }
