@@ -164,7 +164,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        GraalOptions.Meter,
        GraalOptions.Time,
        GraalOptions.Dump,
-       "Impl$$anon$8$$anonfun$1.apply$mcII$sp",
+       "Impl$$anon$9$$anonfun$1.apply$mcII$sp",
        System.out,
        List(new GraphPrinterDumpHandler())
       )
