@@ -16,18 +16,14 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case OrderingLT(a,b)    =>
-
-      // TODO make an abstraction for the if construct
       insert(sym)
-      push(a)
       push(b)
+      push(a)
       val lhs = frameState.pop(kind(a))
       val rhs = frameState.pop(kind(b))
       assert(rhs != null)
       assert(lhs != null)
-      val (thn, els) = ifNode(lhs, Condition.LT, rhs, true, null)
-      val frameStateThen = frameState.copy()
-      val frameStateElse = frameState.copy()
+      val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(lhs, Condition.LT, rhs, true, null)
       // then
       // here we should have a new lastInstr, and the new frameState
       lastInstr = thn
@@ -47,7 +43,6 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
          // else
       lastInstr = els
       frameState = frameStateElse
-      // TODO clearLocals(frameState)
 
       frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
       storeLocal(kind(sym), lookup(sym))
@@ -79,17 +74,13 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
       ???
     case OrderingGT(a,b)    =>
       insert(sym)
-      push(a)
-      push(b)
-      val (thn, els) = ifNode(frameState.pop(kind(a)), Condition.GT, frameState.pop(kind(b)), true, null)
-      val frameStateThen = frameState.copy()
-      val frameStateElse = frameState.copy()
+      push(b, a)
+      val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(kind(a)), Condition.GT, frameState.pop(kind(b)), true, null)
       // then
       // here we should have a new lastInstr, and the new frameState
       lastInstr = thn
       frameState = frameStateThen
 
-      // TODO clearLocals(frameState)
       frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
       storeLocal(kind(sym), lookup(sym))
 

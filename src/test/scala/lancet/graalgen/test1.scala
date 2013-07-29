@@ -39,7 +39,7 @@ trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPr
 
 trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp { self =>
     def params(i: Int, b: Int, c: Int) = ???
-    val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile { val IR: self.type = self
+    val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenEqual { val IR: self.type = self
       val f = (x: Int) => { // TODO this is needed for now to trick the FrameStateBuilder.
         val tmp = x
         val tmp1 = tmp + 1
@@ -56,6 +56,15 @@ trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with
         val tmp12 = tmp11 + 1
         val tmp13 = tmp12 + 1
         val tmp14 = tmp13 + 1
+        val tmp15 = tmp14 + 1
+        val tmp16 = tmp15 + 1
+        val tmp17 = tmp16 + 1
+        val tmp18 = tmp17 + 1
+        val tmp19 = tmp18 + 1
+        val tmp20 = tmp19 + 1
+        val tmp21 = tmp20 + 1
+        val tmp22 = tmp21 + 1
+        val (t1, t2, t3, t4, t5) = (1,2,3,4,5)
         params(tmp5,tmp4,tmp3)
         tmp14
       }
@@ -105,9 +114,10 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
         def main(x: Rep[Int]): Rep[Int] = if (x < 0) x + 42 else x - 42
       }
       val f = (new Prog with Impl).function
+      assert(f(10) == -32)
       assert(f(-42) == 0)
       assert(f(42) == 0)
-      assert(f(0) == 42)
+      assert(f(0) == -42)
     }
   }
 
@@ -122,11 +132,11 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
             if (x > 20) x - 22 else x - 21
       }
       val f = (new Prog with Impl).function
-      assert(f(-43) == -11)
-      assert(f(-0) == -12)
-      assert(f(19) == -2)
-      assert(f(21) == -1)
-      assert(f(42) == 20)
+      assert(f(-10) == -12)
+      assert(f(-11) == -11)
+      assert(f(20) == -1)
+      assert(f(40) == 18)
+
     }
   }
 
@@ -137,7 +147,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
         def main(x: Rep[Int]): Rep[Int] = {
           var sum = 0
           var i = 0
-          val res = while (i < 100) {
+          val res = while (i < x) {
             sum = sum + i
             i = i + 1
             ()
@@ -147,7 +157,6 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
       }
       val f = (new Prog with Impl).function
       (0 to 100) foreach { x => println(f(x)) }
-      // (0 to 100) foreach { x => assert(f(x) == (x * (x + 1) / 2)) }
     }
   }
 
@@ -157,9 +166,9 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
         def main(x: Rep[Int]): Rep[Int] = {
           var sum = 0
           var i = 0
-          var j = 0
-          while (i < 50) {
-            while(j < 50) {
+          while (i < x) {
+            var j = 0
+            while(j < i) {
               sum = sum + j
               j = j + 1
             }
@@ -170,7 +179,41 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
       }
       val f = (new Prog with Impl).function
       (0 to 100) foreach { x => Predef.println(f(x)) }
-      // (0 to 100) foreach { x => assert(f(x) == (x * (x + 1) / 2)) }
+      (0 to 100) foreach { x => assert(f(x) == (0 until x).map(i => (0 until i).sum).sum) }
+    }
+  }
+
+  def testWhileIfWhile = withOutFileChecked(prefix+"-whileifwhile") {
+    withOutFile(prefix+"-whileifwhile") {
+      trait Prog extends DSL {
+        def main(x: Rep[Int]): Rep[Int] = {
+          var sum = 0
+          var i = 0
+          while (i < x) {
+            var j = 0
+            if (i % 2 == 1) {
+              while(j < i) {
+                sum = sum + j
+                j = j + 1
+              }
+            } else {
+              while(j < i) {
+                sum = sum + (j * 2)
+                j = j + 1
+              }
+            }
+
+            i = i + 1
+          }
+          sum
+        }
+      }
+      val f = (new Prog with Impl).function
+      (0 to 100) foreach { x => Predef.println(f(x)) }
+      (0 to 100) foreach {x =>
+        val (v1, v2) = (0 until x).partition(_ % 2 == 1)
+        assert(f(x) == v1.flatMap(i => (0 until i)).sum + v2.flatMap(i => (0 until i)).sum * 2)
+      }
     }
   }
 
@@ -179,9 +222,9 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     withOutFile(prefix+"-while") {
       trait Prog extends DSL {
         def main(x: Rep[Int]): Rep[Int] = {
-          var arr: Rep[Array[Int]] = NewArray[Int](100)
+          var arr: Rep[Array[Int]] = NewArray[Int](x)
           var i = 0
-          val res = while (i < 100) {
+          val res = while (i < x) {
             arr(i) = x
             i = i + 1
             ()

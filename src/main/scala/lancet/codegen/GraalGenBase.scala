@@ -364,10 +364,11 @@ trait GraalBuilder { self: GraalGenBase =>
     case "Long"   => Kind.Long
     case "Float"  => Kind.Float
     case "Double" => Kind.Double
+    case "Unit"   => Kind.Void
     case _ =>  throw new Exception(e);
   }
 
-  def push(c: Exp[Any]): Unit = c match {
+  def push(exps: Exp[Any]*): Unit = exps foreach {
     case Const(v: Int) =>
       frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
     case Const(v: Boolean) =>
@@ -378,7 +379,7 @@ trait GraalBuilder { self: GraalGenBase =>
   }
 
   def lookup(s: Sym[Any]): Int = {
-    assert(stackPos.contains(s), "Symbol used before its definition.")
+    assert(stackPos.contains(s), s"Symbol ($s) used before its definition.")
     stackPos(s)
   }
 
@@ -409,11 +410,10 @@ trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal with Gra
     case _ => super.emitNode(sym, rhs)
   }
 
-  /* TODO Not sure this is smart */
-  override def push(c: Exp[Any]): Unit = c match {
+  override def push(exps: Exp[Any]*): Unit = exps foreach {
     case Def(Reify(s, u, effects)) =>
       push(s)
-    case _ => super.push(c)
+    case exp => super.push(exp)
   }
 
 }

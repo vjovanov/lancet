@@ -13,6 +13,7 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case While(c,b) =>
+         insert(sym)
          /* TODO this should be here only if it is the first block
          val nextFirstInstruction = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode());
          val target = new LancetGraphBuilder.Target(nextFirstInstruction, frameState);
@@ -33,43 +34,45 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
 
          // Create phi functions for all local variables and operand stack slots.
          frameState.insertLoopPhis(loopBegin)
-         loopBegin.setStateAfter(frameState.create(0))
+         loopBegin.setStateAfter(frameState.create(4))
 
-         // We have seen all forward branches. All subsequent backward branches will merge to the
-         // loop header.
-         // This ensures that the loop header has exactly one non-loop predecessor.
-         val loopFristInstr = loopBegin;
-         // We need to preserve the frame state builder of the loop header so that we can merge
-         // values for
-         // phi functions, so make a copy of it.
-         val loopBlockState = frameState.copy() // why is this not used
+         val loopFristInstr = loopBegin
+         val loopBlockState = frameState.copy()
+
          frameState = loopBlockState
-         // emit the conditional
+         lastInstr = loopBegin
+         // clearLocals(frameState)(1, 2, 3)
+         frameState.cleanupDeletedPhis();
+
+         // [begin] load the condition variables
          emitBlock(c)
          push(c.res)
-         // push(Const(1))
-         val (thn, els) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, (loopFristInstr, loopBlockState));
-         val frameStateThen = frameState//.copy() // when should you do a state copy?
-         val frameStateElse = frameState.copy() //this is a loop exit
+         // [end]
+         // clearLocals(liveOut)
 
-         // starting the then block
-         val entryState = frameState
-         frameState = frameStateElse //loopBlockState
+         val ((thn, frameStateThen), (els, frameStateElse)) =
+           ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, (loopBegin, loopBlockState));
+
+         // starting the body (else block)
+         frameState = frameStateElse // should the loop block state go here?
          lastInstr = els
+         // clearLocals(frameState)(1, 2, 3)
+         frameState.cleanupDeletedPhis();
 
-         // emit loop block
+         // [begin] body
          emitBlock(b)
+         // [end] body
 
-         // jump to the loop beginning
          appendGoto({
-           val target = new LancetGraphBuilder.Target(currentGraph.add(new LoopEndNode(loopBegin)), frameState);
-           val result1 = target.fixed;
-           entryState.merge(loopBegin, target.state);
-           result1
+           val target = new LancetGraphBuilder.Target(currentGraph.add(new LoopEndNode(loopBegin)), frameState)
+           val result = target.fixed
+           loopBlockState.merge(loopBegin, target.state)
+           result
          })
-         // else block (after loop)
-         lastInstr = thn
+
+         // after loop (then block)
          frameState = frameStateThen
+         lastInstr = thn
     case _ => super.emitNode(sym, rhs)
   }
 }

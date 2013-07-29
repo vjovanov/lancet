@@ -36,31 +36,33 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
 //    case ObjIntMinValue() => emitValDef(sym, "scala.Int.MinValue")
     case IntPlus(lhs,rhs) =>
       insert(sym)
-      // TODO make an abstraction over of this sequence
-      push(rhs)
-      push(lhs)
+      push(rhs, lhs)
       val addLhs = frameState.pop(Kind.Int)
       val addRhs = frameState.pop(Kind.Int)
-      assert(addLhs != null
-            && addRhs != null, "Popped state must be initialized.")
       frameState.push(Kind.Int, graph.unique(new IntegerAddNode(Kind.Int, addLhs, addRhs)))
       storeLocal(Kind.Int, lookup(sym))
     case IntMinus(lhs,rhs) =>
       insert(sym)
-      push(rhs)
-      push(lhs)
+      push(rhs, lhs)
       frameState.push(Kind.Int, graph.unique(new IntegerSubNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int))))
       storeLocal(Kind.Int, lookup(sym))
     case IntTimes(lhs,rhs) =>
       insert(sym)
-      push(rhs)
-      push(lhs)
+      push(rhs, lhs)
       frameState.push(Kind.Int, graph.unique(new IntegerMulNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int))))
       storeLocal(Kind.Int, lookup(sym))
 
 //    // case IntDivideFrac(lhs,rhs) => emitValDef(sym, quote(lhs) + " / " + quote(rhs))
-//    case IntDivide(lhs,rhs) => emitValDef(sym, quote(lhs) + " / " + quote(rhs))
-//    case IntMod(lhs,rhs) => emitValDef(sym, quote(lhs) + " % " + quote(rhs))
+    case IntDivide(lhs,rhs) =>
+      insert(sym)
+      push(rhs, lhs)
+      frameState.push(Kind.Int, graph.add(append(new IntegerDivNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int)))))
+      storeLocal(Kind.Int, lookup(sym))
+    case IntMod(lhs,rhs) =>
+      insert(sym)
+      push(rhs, lhs)
+      frameState.push(Kind.Int, graph.add(append(new IntegerRemNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int)))))
+      storeLocal(Kind.Int, lookup(sym))
 //    case IntBinaryOr(lhs,rhs) => emitValDef(sym, quote(lhs) + " | " + quote(rhs))
 //    case IntBinaryAnd(lhs,rhs) => emitValDef(sym, quote(lhs) + " & " + quote(rhs))
 //    case IntBinaryXor(lhs,rhs) => emitValDef(sym, quote(lhs) + " ^ " + quote(rhs))

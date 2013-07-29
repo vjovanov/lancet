@@ -17,17 +17,14 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
       frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
          insert(sym)
          push(c)
-         println("FS: " + frameState)
-         val (thn, els) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, null)
-         val frameStateThen = frameState.copy()
-         val frameStateElse = frameState.copy()
+         val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, null)
          // then
          // here we should have a new lastInstr, and the new frameState
          lastInstr = thn
          frameState = frameStateThen
 
-         emitBlock(a)
-         push(a.res) // for the return value
+         emitBlock(b)
+         push(b.res) // for the return value
          storeLocal(kind(sym), lookup(sym))
 
 
@@ -42,9 +39,8 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
          // else
          lastInstr = els
          frameState = frameStateElse
-         // TODO clear the locals not specific to this state
-         emitBlock(b)
-         push(b.res) // for the return value
+         emitBlock(a)
+         push(a.res) // for the return value
          storeLocal(kind(sym), lookup(sym))
 
          // The EndNode for the already existing edge.
