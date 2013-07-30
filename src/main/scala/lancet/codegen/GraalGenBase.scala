@@ -32,6 +32,7 @@ import lancet.core._
 
 import java.util.concurrent.Callable
 import java.util.BitSet
+import java.lang.reflect.Method
 
 import com.oracle.graal.phases._   // PhasePlan
 import com.oracle.graal.phases.common._
@@ -55,7 +56,6 @@ import collection.JavaConversions._
 import com.oracle.graal.debug.internal._
 import com.oracle.graal.printer._
 import com.oracle.graal.api.meta._
-
 
 
 trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGraph { self: GraalBuilder =>
@@ -127,7 +127,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     val method = runtime.lookupJavaMethod(reflectMeth)
 
     val plan = new PhasePlan()
-    // plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
+    plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
     plan.addPhase(PhasePosition.AFTER_PARSING, printGraphPhase("AFTER_PARSING"))
     plan.addPhase(PhasePosition.HIGH_LEVEL, printGraphPhase("HIGH_LEVEL"))
     plan.addPhase(PhasePosition.MID_LEVEL, printGraphPhase("MID_LEVEL"))
@@ -163,7 +163,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        GraalOptions.Meter,
        GraalOptions.Time,
        GraalOptions.Dump,
-       "Impl$$anon$8$$anonfun$1.apply$mcII$sp",
+       "Impl$$anon$3$$anonfun$1.apply$mcII$sp",
        System.out,
        List(new GraphPrinterDumpHandler())
       )
@@ -188,17 +188,21 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     graph.getNodes.foreach(n => println(n.toString(Node.Verbosity.Debugger) + n.inputs().map(_.toString(Node.Verbosity.Id)).mkString("(",",",")")))
 
   def printInvoke(invoke: InvokeNode): Unit = {
-    val methodCallTarget = invoke.methodCallTarget()
-    val targetMethod = methodCallTarget.targetMethod() // ResolvedJavaMethod
+    if (invoke.callTarget.isInstanceOf[MethodCallTargetNode]) {
+      val methodCallTarget = invoke.methodCallTarget()
+      val targetMethod = methodCallTarget.targetMethod() // ResolvedJavaMethod
 
-    println("  invoke: " + invoke)
-    println("    trgt: " + targetMethod)
-    println("    args: " + methodCallTarget.arguments())
+      println("  invoke: " + invoke)
+      println("    trgt: " + targetMethod)
+      println("    args: " + methodCallTarget.arguments())
 
-    val assumptions = new Assumptions(true)
+      val assumptions = new Assumptions(true)
 
-    val info = InliningUtil.getInlineInfo(methodCallTarget.invoke(), assumptions, OptimisticOptimizations.ALL)
-    println("    info: " + info)
+      val info = InliningUtil.getInlineInfo(methodCallTarget.invoke(), assumptions, OptimisticOptimizations.ALL)
+      println("    info: " + info)
+    } else {
+      println("Invoke Node: " + invoke)
+    }
   }
 
   def phase(f: StructuredGraph => Unit) = new Phase {
@@ -365,7 +369,7 @@ trait GraalBuilder { self: GraalGenBase =>
     case "Float"  => Kind.Float
     case "Double" => Kind.Double
     case "Unit"   => Kind.Void
-    case _ =>  throw new Exception(e);
+    case _        => Kind.Object
   }
 
   def push(exps: Exp[Any]*): Unit = exps foreach {
@@ -373,6 +377,12 @@ trait GraalBuilder { self: GraalGenBase =>
       frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
     case Const(v: Boolean) =>
       frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
+    case Const(v: Double) =>
+      frameState.dpush(ConstantNode.forConstant(Constant.forDouble(v), runtime, graph))
+    case Const(v: Long) =>
+      frameState.lpush(ConstantNode.forConstant(Constant.forLong(v), runtime, graph))
+    case Const(v: AnyRef) =>
+      frameState.apush(ConstantNode.forConstant(Constant.forObject(v), runtime, graph))
     case sym@Sym(v) =>
       val loc = frameState.loadLocal(lookup(sym))
       frameState.push(kind(sym), loc)
@@ -392,6 +402,28 @@ trait GraalBuilder { self: GraalGenBase =>
     val removeLocals = new BitSet()
     locals.foreach(removeLocals.set(_))
     fs.clearNonLiveLocals(removeLocals)
+  }
+
+  def invoke(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
+    val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
+    val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
+    val graalArgs = frameState.popArguments(resolvedMethod.getSignature().getParameterSlots(true), resolvedMethod.getSignature().getParameterCount(true))
+    System.out.println(resolvedMethod.getSignature().getParameterCount(true))
+    genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
+
+    lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
+
+    // block stuff
+    val nextFirstInstruction = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
+    val target = new LancetGraphBuilder.Target(nextFirstInstruction, frameState)
+    val result = target.fixed
+    val tmpState = frameState.copy()
+    appendGoto(result)
+
+    frameState = tmpState
+    frameState.cleanupDeletedPhis();
+    frameState.setRethrowException(false);
+    lastInstr = nextFirstInstruction
   }
 
 }
