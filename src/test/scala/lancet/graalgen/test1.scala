@@ -40,7 +40,7 @@ trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPr
 trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp { self =>
     def params(i: Int, b: Int, c: Int) = ???
     val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse
-      with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile
+      with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps
       with GraalGenEqual with GraalGenStringOps with GraalGenIOOps with GraalGenMiscOps { val IR: self.type = self
       val f = (x: Int) => { // TODO this is needed for now to trick the FrameStateBuilder.
         val tmp0       = x
@@ -248,13 +248,13 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
         }
       }
       val f = (new Prog with Impl).function
-      (0 to 100) foreach { x => Predef.println(f(x)) }
-      (0 to 100) foreach { x =>
+      (0 to 10) foreach { x => Predef.println(f(x)) }
+      (0 to 10) foreach { x =>
         val (v1, v2) = (0 until x).partition(_ % 2 == 1)
         assert(f(x) == v1.flatMap(i => (0 until i)).sum + v2.flatMap(i => (0 until i)).sum * 2)
       }
     }
-  }
+  }*/
 
   def testArrays = withOutFileChecked(prefix+"-arrays") {
 
@@ -268,13 +268,13 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
             i = i + 1
             ()
           }
-          if (x > 0) arr(0) else x          
+          if (x > 0) arr(0) else x
         }
       }
       val f = (new Prog with Impl).function
-      (5 to 100) foreach { x => assert(f(x) == x) }
+      (5 to 10) foreach { x => assert(f(x) == x) }
     }
-  }*/
+  }
 
   def testFunctions = withOutFileChecked(prefix+"-functions") {
 
