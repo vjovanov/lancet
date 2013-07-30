@@ -32,6 +32,7 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
       // TODO clearLocals(frameState)
       frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
       storeLocal(kind(sym), lookup(sym))
+
       // appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
       var exitState = frameState.copy()
       val target = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
@@ -70,8 +71,6 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
       lastInstr = mergeNode
       mergeNode.setStateAfter(frameState.create(0))
 
-    case OrderingLTEQ(a,b)  =>
-      ???
     case OrderingGT(a,b)    =>
       insert(sym)
       push(b, a)
@@ -129,6 +128,8 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
     case OrderingMax(a,b)   =>
       ???
     case OrderingMin(a,b)   =>
+      ???
+    case OrderingLTEQ(a,b)  =>
       ???
     case _                  =>
       super.emitNode(sym, rhs)

@@ -136,12 +136,13 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       println("To debug use:")
       println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
       println("Method " + method)
-      Debug.dump(graph, "Generated")
-
+      
+      Debug.dump(graph, "Constructed")
+      new DeadCodeEliminationPhase().apply(graph)
+      Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
       val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
-
-      println("===== DONE")
+     
 
       res
     }
@@ -163,7 +164,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        GraalOptions.Meter,
        GraalOptions.Time,
        GraalOptions.Dump,
-       "Impl$$anon$3$$anonfun$1.apply$mcII$sp",
+       "Impl$$anon$9$$anonfun$1.apply$mcII$sp",
        System.out,
        List(new GraphPrinterDumpHandler())
       )

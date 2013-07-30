@@ -15,15 +15,32 @@ trait GraalGenArrayOps extends GraalNestedCodegen with GraalBuilder {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case a@ArrayNew(n) =>
-    case e@ArrayFromSeq(xs) =>
+      insert(sym)
+      push(n)
+      genNewPrimitiveArray(4) // TODO make a manifest based case
+      storeLocal(Kind.Object, lookup(sym))
     case ArrayApply(x,n) =>
+      insert(sym)
+      push(x)
+      push(n)
+      genLoadIndexed(kind(sym))
+      storeLocal(kind(sym), lookup(sym))
     case ArrayUpdate(x,n,y) =>
+      push(x)
+      push(n)
+      push(y)
+      genStoreIndexed(kind(y))
     case ArrayLength(x) =>
+      insert(sym)
+      push(x)
+      genArrayLength()
+      storeLocal(Kind.Int, lookup(sym))
     case ArrayForeach(a,x,block) =>
     case ArrayCopy(src,srcPos,dest,destPos,len) =>
     case a@ArraySort(x) =>
     case n@ArrayMap(a,x,blk) =>
     case ArrayToSeq(a) =>
+    case e@ArrayFromSeq(xs) =>
     case _ => super.emitNode(sym, rhs)
   }
 }

@@ -132,7 +132,6 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-basic"
 
-  // interpret
   def testInc = withOutFileChecked(prefix+"-inc") {
 
     withOutFile(prefix+"-inc") {
@@ -257,9 +256,9 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  def testArrays = withOutFileChecked(prefix+"-while") {
+  def testArrays = withOutFileChecked(prefix+"-arrays") {
 
-    withOutFile(prefix+"-while") {
+    withOutFile(prefix+"-arrays") {
       trait Prog extends DSL {
         def main(x: Rep[Int]): Rep[Int] = {
           var arr: Rep[Array[Int]] = NewArray[Int](x)
@@ -269,11 +268,11 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
             i = i + 1
             ()
           }
-          x
+          if (x > 0) arr(0) else x          
         }
       }
       val f = (new Prog with Impl).function
-      (0 to 100) foreach { x => assert(f(x) == (x * (x + 1) / 2)) }
+      (5 to 100) foreach { x => assert(f(x) == x) }
     }
   }*/
 
