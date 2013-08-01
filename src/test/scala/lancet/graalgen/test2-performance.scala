@@ -37,7 +37,7 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-performance"
 
-  def testInc = withOutFileChecked(prefix+"-kmeans") {
+  def testInc = withOutFile(prefix+"-kmeans") {
 
     withOutFile(prefix+"-kmeans") {
       trait Prog extends DSL {
@@ -46,30 +46,30 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
               val tol: Rep[Double] = 0.001
 
               val x = NewArray[Double](3);
-              val x_row = x.length/3; 
+              val x_row = x.length/3;
               val x_col = 3;//x[0].length;
 
               val mu = NewArray[Double](3);
-              val mu_row = mu.length/3; 
+              val mu_row = mu.length/3;
               val mu_col = 3;// mu[0]
-          
+
               val oldmu = NewArray[Double](mu_row * mu_col);
-              
+
               // System.out.println("Kmeans starting Computation");
-          
+
               // long now = System.currentTimeMillis();
-              var diff: Rep[Double] = tol + 1; 
+              var diff: Rep[Double] = tol + 1;
               val c = NewArray[Double](x_row);
               var iter = 0
               while (diff > tol) {
                 iter = iter + 1;
-          
+
                 //System.arraycopy(mu, 0, oldmu, 0, mu_row * mu_col);
-          
+
                 // constructNearestClusterVector(c, x, x_row, x_col, mu, mu_row, mu_col)
                 // computeNewCentroids(c, x, x_row, x_col, mu, mu_row, mu_col)
-          
-                diff = 0;  
+
+                diff = 0;
                 var i = 0
                 while(i < mu_row) {
                   var j = 0;
@@ -79,13 +79,13 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
                   }
                   i = i + 1
                 }
-          
-              } 
-          
-          
-              // System.out.println("Elapsed time: "+ (double)(System.currentTimeMillis() - now)/1000 + " seconds");
-              // System.out.println("Finished in "+ iter + " iterations");
-          
+                diff = 0
+              }
+
+
+              // println("Elapsed time: "+ (System.currentTimeMillis() - now)/1000 + " seconds");
+              // println("Finished in "+ iter + " iterations");
+
               // for(int i = 0; i < mu_row; i++) {
               //   for(int j = 0; j < mu_col; j++)
               //     System.out.print(mu[i * mu_col + j] + " ");

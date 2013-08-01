@@ -136,13 +136,13 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       println("To debug use:")
       println("Scope " + com.oracle.graal.debug.internal.DebugScope.getInstance.getQualifiedName)
       println("Method " + method)
-      
+
       Debug.dump(graph, "Constructed")
       new DeadCodeEliminationPhase().apply(graph)
       Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
       val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
-     
+
 
       res
     }
@@ -373,15 +373,28 @@ trait GraalBuilder { self: GraalGenBase =>
     case _        => Kind.Object
   }
 
+  def operation(sym: Sym[_])(node: Seq[ValueNode] => ValueNode): Unit = {
+    insert(sym)
+    val operands = rsyms(findDefinition(sym).get.rhs)(x => x.asInstanceOf[Exp[_]] :: Nil).toSeq.reverse
+    // push all operands on the stack
+    push(operands:_*)
+    val valueNodes = operands map { x => frameState.pop(kind(x)) }
+    frameState.push(kind(sym), node(valueNodes))
+
+    storeLocal(kind(sym), lookup(sym))
+  }
+
   def push(exps: Exp[Any]*): Unit = exps foreach {
     case Const(v: Int) =>
       frameState.ipush(ConstantNode.forConstant(Constant.forInt(v), runtime, graph))
-    case Const(v: Boolean) =>
-      frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
-    case Const(v: Double) =>
-      frameState.dpush(ConstantNode.forConstant(Constant.forDouble(v), runtime, graph))
     case Const(v: Long) =>
       frameState.lpush(ConstantNode.forConstant(Constant.forLong(v), runtime, graph))
+    case Const(v: Float) =>
+      frameState.fpush(ConstantNode.forConstant(Constant.forDouble(v), runtime, graph))
+    case Const(v: Double) =>
+      frameState.dpush(ConstantNode.forConstant(Constant.forDouble(v), runtime, graph))
+    case Const(v: Boolean) =>
+      frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
     case Const(v: AnyRef) =>
       frameState.apush(ConstantNode.forConstant(Constant.forObject(v), runtime, graph))
     case sym@Sym(v) =>
@@ -390,7 +403,7 @@ trait GraalBuilder { self: GraalGenBase =>
   }
 
   def lookup(s: Sym[Any]): Int = {
-    assert(stackPos.contains(s), s"Symbol ($s) used before its definition.")
+    assert(stackPos.contains(s), s"Symbol ($s) must have a stack position allocated before its usage. Use function insert(s: Sym[Any]).")
     stackPos(s)
   }
 

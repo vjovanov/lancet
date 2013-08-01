@@ -76,7 +76,7 @@ public class LancetGraphBuilder {
 
     private final MetaAccessProvider runtime;
     private ConstantPool constantPool;
-    private ResolvedJavaMethod method;
+    public ResolvedJavaMethod method;
     private int entryBCI;
     private ProfilingInfo profilingInfo;
 
@@ -1251,22 +1251,22 @@ public class LancetGraphBuilder {
         }
     }
 
-    protected ConstantNode appendConstant(Constant constant) {
+    public ConstantNode appendConstant(Constant constant) {
         assert constant != null;
         return ConstantNode.forConstant(constant, runtime, currentGraph);
     }
 
-    protected ValueNode append(FixedNode fixed) {
+    public ValueNode append(FixedNode fixed) {
         lastInstr.setNext(fixed);
         lastInstr = null;
         return fixed;
     }
 
-    protected ValueNode append(FixedWithNextNode x) {
+    public ValueNode append(FixedWithNextNode x) {
         return appendWithBCI(x);
     }
 
-    public static ValueNode append(ValueNode v) {
+    public ValueNode append(ValueNode v) {
         return v;
     }
 

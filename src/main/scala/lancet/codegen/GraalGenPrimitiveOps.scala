@@ -1,5 +1,7 @@
 package lancet.codegen
 
+import java.lang.reflect.Modifier._
+
 import scala.virtualization.lms.util.OverloadHack
 import scala.virtualization.lms.common._
 import scala.reflect.SourceContext
@@ -13,35 +15,32 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = rhs match {
-    case IntPlus(lhs,rhs) =>
-      insert(sym)
-      push(rhs, lhs)
-      val addLhs = frameState.pop(Kind.Int)
-      val addRhs = frameState.pop(Kind.Int)
-      frameState.push(Kind.Int, graph.unique(new IntegerAddNode(Kind.Int, addLhs, addRhs)))
-      storeLocal(Kind.Int, lookup(sym))
-    case IntMinus(lhs,rhs) =>
-      insert(sym)
-      push(rhs, lhs)
-      frameState.push(Kind.Int, graph.unique(new IntegerSubNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int))))
-      storeLocal(Kind.Int, lookup(sym))
-    case IntTimes(lhs,rhs) =>
-      insert(sym)
-      push(rhs, lhs)
-      frameState.push(Kind.Int, graph.unique(new IntegerMulNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int))))
-      storeLocal(Kind.Int, lookup(sym))
+    //Double
+    case DoublePlus(lhs,rhs)   =>
+      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+    case DoubleMinus(lhs,rhs)  =>
+      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+    case DoubleTimes(lhs,rhs)  =>
+      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+    case DoubleDivide(lhs,rhs) =>
+      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
 
-//    // case IntDivideFrac(lhs,rhs) => emitValDef(sym, quote(lhs) + " / " + quote(rhs))
-    case IntDivide(lhs,rhs) =>
-      insert(sym)
-      push(rhs, lhs)
-      frameState.push(Kind.Int, graph.add(append(new IntegerDivNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int)))))
-      storeLocal(Kind.Int, lookup(sym))
-    case IntMod(lhs,rhs) =>
-      insert(sym)
-      push(rhs, lhs)
-      frameState.push(Kind.Int, graph.add(append(new IntegerRemNode(Kind.Int, frameState.pop(Kind.Int), frameState.pop(Kind.Int)))))
-      storeLocal(Kind.Int, lookup(sym))
+    // Floating Point
+    case FloatPlus(lhs,rhs)    =>
+      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+    case FloatMinus(lhs,rhs)   =>
+      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+    case FloatTimes(lhs,rhs)   =>
+      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+    case FloatDivide(lhs,rhs)  =>
+      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+
+    // Intenger
+    case IntPlus(lhs,rhs)      => operation(sym)(x => graph.unique(new IntegerAddNode(Kind.Int, x(0), x(1))))
+    case IntMinus(lhs,rhs)     => operation(sym)(x => graph.unique(new IntegerSubNode(Kind.Int, x(0), x(1))))
+    case IntTimes(lhs,rhs)     => operation(sym)(x => graph.unique(new IntegerMulNode(Kind.Int, x(0), x(1))))
+    case IntDivide(lhs,rhs)    => operation(sym)(x => graph.add(append(new IntegerDivNode(Kind.Int, x(0), x(1)))))
+    case IntMod(lhs,rhs)       => operation(sym)(x => graph.add(append(new IntegerRemNode(Kind.Int, x(0), x(1)))))
     case _ => super.emitNode(sym, rhs)
   }
 }
