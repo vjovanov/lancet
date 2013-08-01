@@ -491,7 +491,7 @@ public class LancetGraphBuilder {
         frameState.ipush(append(currentGraph.unique(new NormalizeCompareNode(x, y, isUnorderedLess))));
     }
 
-    private void genConvert(ConvertNode.Op opcode) {
+    public void genConvert(ConvertNode.Op opcode) {
         ValueNode input = frameState.pop(opcode.from.getStackKind());
         frameState.push(opcode.to.getStackKind(), append(currentGraph.unique(new ConvertNode(opcode, input))));
     }

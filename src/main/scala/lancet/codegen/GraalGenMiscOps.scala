@@ -19,10 +19,28 @@ trait GraalGenMiscOps extends GraalNestedCodegen with GraalBuilder {
       case PrintLn(s)  =>
         insert(sym)
         push(Const(Predef), s)
+        if (s.tp.toString != "java.lang.String") {
+          if (isPrimitiveType(s.tp)) {
+            s.tp.toString match {
+              case "Int" =>
+                push(Const(Int), s)
+                invoke(scala.Int.getClass, "toString", classOf[Int])
+            }
+          }
+        }
         invoke(Predef.getClass, "println", classOf[Any])
       case Print(s)    =>
         insert(sym)
         push(Const(Predef), s)
+        if (s.tp.toString != "java.lang.String") {
+          if (isPrimitiveType(s.tp)) {
+            s.tp.toString match {
+              case "Int" =>
+                push(Const(Int), s)
+                invoke(scala.Int.getClass, "toString", classOf[Int])
+            }
+          }
+        }
         invoke(Predef.getClass, "print", classOf[Any])
       case Exit(a)     => ???//emitValDef(sym, "exit(" + quote(a) + ")")
       case Return(x)   => ???//emitValDef(sym, "return " + quote(x))

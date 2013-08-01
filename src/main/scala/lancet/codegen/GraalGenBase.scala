@@ -422,7 +422,6 @@ trait GraalBuilder { self: GraalGenBase =>
     val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
     val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
     val graalArgs = frameState.popArguments(resolvedMethod.getSignature().getParameterSlots(true), resolvedMethod.getSignature().getParameterCount(true))
-    System.out.println(resolvedMethod.getSignature().getParameterCount(true))
     genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
 
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))

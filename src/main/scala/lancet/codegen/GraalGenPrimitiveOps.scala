@@ -15,6 +15,7 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = rhs match {
+
     //Double
     case DoublePlus(lhs,rhs)   =>
       operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
@@ -36,11 +37,45 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
       operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
 
     // Intenger
-    case IntPlus(lhs,rhs)      => operation(sym)(x => graph.unique(new IntegerAddNode(Kind.Int, x(0), x(1))))
-    case IntMinus(lhs,rhs)     => operation(sym)(x => graph.unique(new IntegerSubNode(Kind.Int, x(0), x(1))))
-    case IntTimes(lhs,rhs)     => operation(sym)(x => graph.unique(new IntegerMulNode(Kind.Int, x(0), x(1))))
-    case IntDivide(lhs,rhs)    => operation(sym)(x => graph.add(append(new IntegerDivNode(Kind.Int, x(0), x(1)))))
-    case IntMod(lhs,rhs)       => operation(sym)(x => graph.add(append(new IntegerRemNode(Kind.Int, x(0), x(1)))))
+    case IntPlus(lhs,rhs)      =>
+      operation(sym)(x => graph.unique(new IntegerAddNode(Kind.Int, x(0), x(1))))
+    case IntMinus(lhs,rhs)     =>
+      operation(sym)(x => graph.unique(new IntegerSubNode(Kind.Int, x(0), x(1))))
+    case IntTimes(lhs,rhs)     =>
+      operation(sym)(x => graph.unique(new IntegerMulNode(Kind.Int, x(0), x(1))))
+    case IntDivide(lhs,rhs)    =>
+      operation(sym)(x => graph.add(append(new IntegerDivNode(Kind.Int, x(0), x(1)))))
+    case IntMod(lhs,rhs)       =>
+      operation(sym)(x => graph.add(append(new IntegerRemNode(Kind.Int, x(0), x(1)))))
+
+    // Conversions
+    case IntToLong(lhs) =>
+      insert(sym)
+      push(lhs)
+      genConvert(ConvertNode.Op.I2L)
+      storeLocal(kind(sym), lookup(sym))
+    case IntToFloat(lhs) =>
+      insert(sym)
+      push(lhs)
+      genConvert(ConvertNode.Op.I2F)
+      storeLocal(kind(sym), lookup(sym))
+    case IntToDouble(lhs) =>
+      insert(sym)
+      push(lhs)
+      genConvert(ConvertNode.Op.I2D)
+      storeLocal(kind(sym), lookup(sym))
+    case FloatToInt(lhs) =>
+      insert(sym)
+      push(lhs)
+      genConvert(ConvertNode.Op.F2I)
+      storeLocal(kind(sym), lookup(sym))
+    case FloatToDouble(lhs) =>
+      insert(sym)
+      push(lhs)
+      genConvert(ConvertNode.Op.F2D)
+      storeLocal(kind(sym), lookup(sym))
+
+
     case _ => super.emitNode(sym, rhs)
   }
 }
