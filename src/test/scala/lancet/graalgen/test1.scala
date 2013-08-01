@@ -132,7 +132,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-basic"
 
-  def testInc = withOutFileChecked(prefix+"-inc") {
+  def testInc = withOutFile(prefix+"-inc") {
 
     withOutFile(prefix+"-inc") {
       trait Prog extends DSL {
@@ -146,7 +146,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  def testIf = withOutFileChecked(prefix+"-if") {
+  def testIf = withOutFile(prefix+"-if") {
 
     withOutFile(prefix+"-if") {
       trait Prog extends DSL {
@@ -160,7 +160,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  def testNestedIf = withOutFileChecked(prefix+"-nestedif") {
+  def testNestedIf = withOutFile(prefix+"-nestedif") {
 
     withOutFile(prefix+"-nestedif") {
       trait Prog extends DSL {
@@ -179,7 +179,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  def testWhile = withOutFileChecked(prefix+"-while") {
+  def testWhile = withOutFile(prefix+"-while") {
 
     withOutFile(prefix+"-while") {
       trait Prog extends DSL {
@@ -199,7 +199,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  def testNestedWhile = withOutFileChecked(prefix+"-nestedwhile") {
+  def testNestedWhile = withOutFile(prefix+"-nestedwhile") {
     withOutFile(prefix+"-nestedwhile") {
       trait Prog extends DSL {
         def main(x: Rep[Int]): Rep[Int] = {
@@ -222,7 +222,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  /*def testWhileIfWhile = withOutFileChecked(prefix+"-whileifwhile") {
+  def testWhileIfWhile = withOutFileChecked(prefix+"-whileifwhile") {
     withOutFile(prefix+"-whileifwhile") {
       trait Prog extends DSL {
         def main(x: Rep[Int]): Rep[Int] = {
@@ -254,9 +254,9 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
         assert(f(x) == v1.flatMap(i => (0 until i)).sum + v2.flatMap(i => (0 until i)).sum * 2)
       }
     }
-  }*/
+  }
 
-  def testArrays = withOutFileChecked(prefix+"-arrays") {
+  def testArrays = withOutFile(prefix+"-arrays") {
 
     withOutFile(prefix+"-arrays") {
       trait Prog extends DSL {
@@ -276,7 +276,7 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  def testFunctions = withOutFileChecked(prefix+"-functions") {
+  def testFunctions = withOutFile(prefix+"-functions") {
 
     withOutFile(prefix+"-functions") {
       trait Prog extends DSL {

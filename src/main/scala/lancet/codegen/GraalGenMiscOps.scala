@@ -14,13 +14,14 @@ trait GraalGenMiscOps extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
-    insert(sym)
     rhs match {
       case PrintF(f,x) => ???//emitValDef(sym, "printf(" + (f::x.map(quote)).mkString(",") + ")")
       case PrintLn(s)  =>
+        insert(sym)
         push(Const(Predef), s)
         invoke(Predef.getClass, "println", classOf[Any])
       case Print(s)    =>
+        insert(sym)
         push(Const(Predef), s)
         invoke(Predef.getClass, "print", classOf[Any])
       case Exit(a)     => ???//emitValDef(sym, "exit(" + quote(a) + ")")

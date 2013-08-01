@@ -14,7 +14,6 @@ trait GraalGenIOOps extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
-    insert(sym)
     rhs match {
       case ObjFileApply(dir)       => ???//emitValDef(sym, "new java.io.File(" + quote(dir) + ")")
       case FileGetCanonicalFile(f) => ???//emitValDef(sym, quote(f) + ".getCanonicalFile()")

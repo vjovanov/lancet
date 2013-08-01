@@ -13,9 +13,9 @@ trait GraalGenStringOps extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) =  {
-    insert(sym)
       rhs match {
         case StringPlus(s1,s2)       =>
+          insert(sym)
           if (s2.tp.toString == "java.lang.String") {
             push(s1, s2)
             invoke(classOf[String], "concat", classOf[String])
