@@ -13,17 +13,17 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = rhs match {
-    case IfThenElse(c,a,b) =>
-      frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
+    case IfThenElse(c,thenBlock,elseBlock) =>
       insert(sym)
       push(c)
-      val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, null)
-      // then
+      val rhs = appendConstant(Constant.INT_0)
+      val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(Kind.Int), Condition.EQ, rhs, true, null)
       lastInstr = thn
       frameState = frameStateThen
+      // [else] (NOTE: That is how scala and java do it. Yes else goes into the then block.)
 
-      emitBlock(b)
-      push(b.res) // for the return value
+      emitBlock(elseBlock)
+      push(elseBlock.res) // for the return value
       storeLocal(kind(sym), lookup(sym))
 
       // appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
@@ -34,12 +34,12 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
        result.fixed
       })
 
-      // else
       lastInstr = els
       frameState = frameStateElse
+      // [then] (NOTE: That is how scala and java do it. Yes else goes into the then block.)
 
-      emitBlock(a)
-      push(a.res)
+      emitBlock(thenBlock)
+      push(thenBlock.res)
       storeLocal(kind(sym), lookup(sym))
 
       // The EndNode for the already existing edge.

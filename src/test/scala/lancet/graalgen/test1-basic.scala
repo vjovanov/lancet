@@ -147,17 +147,10 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
   def testIf = withOutFile(prefix+"-if") {
     trait Prog extends DSL {
       def main(x: Rep[Int]): Rep[Int] = {
-        val cond = x < 0
-        println(cond)
-        if (cond) x + 42 else x - 42
+        if (x < 0) x + 42 else x - 42
       }
     }
     val f = (new Prog with Impl).function
-
-    println(f(10))
-    println(f(-42))
-    println(f(42))
-    println(f(0))
 
     assert(f(10) == -32)
     assert(f(-42) == 0)

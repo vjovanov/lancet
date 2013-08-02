@@ -63,7 +63,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     }
   }*/
 
-  /*def testArithmetics = withOutFile(prefix+"-arithmetics") {
+  def testArithmetics = withOutFile(prefix+"-arithmetics") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
@@ -72,14 +72,8 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
         println("Int Arithmetics:")
         println(i + 1) // 2
         println(1 + i) // 2
-        // println(1.0D + d) // 2.0D
-        // println(1.0F + f) // 2.0f
-        // println((1 + f)) // 2.0F
         println("Double Arithmetics:")
-        // println(d + 1.0D) // 2.0D
-        // println((i + f)) // 2.0F
         println(i + d) // 2.0D
-        // println(f + d) // 2.0D
         v
       }
     }
@@ -88,68 +82,31 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-arithmetics-out"){
       f(1)
     }
-  }*/
+  }
 
   def testConditions = withOutFile(prefix + "-conditions") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
-        val f: Rep[Float] = v.toFloat
-        val d: Rep[Double] = v.toDouble
+        // val f: Rep[Float] = v.toFloat
+        // val d: Rep[Double] = v.toDouble
         // Int
         println("Int:")
         if(i > i - 1) println("OK!") else println("ERROR!")
         if(i > i) println("ERROR!") else println("OK!")
-        // if(i < i + 1) println("OK!") else println("ERROR!")
-        // if(i < i) println("ERROR!") else println("OK!")
-        // if(i >= i) println("OK!") else println("ERROR!")
-        // if(i >= i + 1) println("ERROR!") else println("OK!")
-        // if(i <= i) println("OK!") else println("ERROR!")
-        // if(i <= i - 1) println("ERROR!") else println("OK!")
-
-        // Float
-        /*println(f)
-        println((f + 1.0F))
-        println(f < (f + 1.0F))
-        println(f > f - 1)
-        println(f >= f)
-        println(f <= f)
-        println(f > f)
-        println(f < f)
-        println(f > f + 1)
-        println(f < f - 1)
-        if(f > f) println("ERROR!") else println("OK!")
-        if(f >= f) println("OK!") else println("ERROR!")
-        if(f < f + 1) println("OK!") else println("ERROR!")
-        if(f < f) println("ERROR!") else println("OK!")
-        if(f <= f) println("OK!") else println("ERROR!")
-        if(f > (f - 1.0F)) println("OK!") else println("ERROR!")
-        if(f >= f + 1) println("ERROR!") else println("OK!")
-        if(f <= f - 1) println("ERROR!") else println("OK!")*/
-
+        if(i < i + 1) println("OK!") else println("ERROR!")
+        if(i < i) println("ERROR!") else println("OK!")
+        if(i >= i) println("OK!") else println("ERROR!")
+        if(i >= i + 1) println("ERROR!") else println("OK!")
+        if(i <= i) println("OK!") else println("ERROR!")
+        if(i <= i - 1) println("ERROR!") else println("OK!")
 
         // Double
-        // println("Double:")
-        // println(d)
-        // println((d + 1.0D))
-        // println(d < (d + 1.0D))
-        // println(d > d - 1.0D)
-        // println(d >= d)
-        // println(d <= d)
-        // println(d > d)
-        // println(d < d)
-        // println(d > d + 1.0D)
-        // println(d < d - 1.0D)
-        // if(d > d - 1) println("OK!") else println("ERROR!")
-        // if(d > d) println("ERROR!") else println("OK!")
-        // if(d < d + 1) println("OK!") else println("ERROR!")
-        // if(d < d) println("ERROR!") else println("OK!")
-        // if(d >= d) println("OK!") else println("ERROR!")
-        // if(d >= d + 1) println("ERROR!") else println("OK!")
-        // if(d <= d) println("OK!") else println("ERROR!")
-        // if(d <= d - 1) println("ERROR!") else println("OK!")
-
-        println("Long:")
+        // This fails with because of nulls in the frameStateBuilder. Where do they come from???
+        // val x = d < d
+        // val y = d > d
+        // println(x)
+        // println(y)
         v
       }
     }

@@ -92,11 +92,11 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
 
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
-    clearLocals(frameState)(1)
+
     // LMS code generation
     emitBlock(body)
     push(body.res) // push the block result for the return
-    clearLocals(frameState)(1)
+
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
 
@@ -164,7 +164,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        GraalOptions.Meter,
        GraalOptions.Time,
        GraalOptions.Dump,
-       "Impl$$anon$3$$anonfun$1.apply$mcII$sp",
+       "Impl$$anon$10$$anonfun$1.apply$mcII$sp",
        System.out,
        List(new GraphPrinterDumpHandler())
       )

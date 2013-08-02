@@ -15,35 +15,37 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
 
   def condition(c: Condition)(sym: Sym[_], a: Exp[_], b: Exp[_]): Unit = {
-    assert(kind(a) == kind(b), "Must compare same types!!!")
+    assert(kind(a) == kind(b), "Can not compare different primitive types!!!")
     insert(sym)
     val (lhs, cond, rhs) = a.tp.toString match {
       case "Int"  =>
-        push(b, a)
-        (frameState.pop(kind(a)), c.negate, frameState.pop(kind(b)))
+        push(a, b)
+        val rhs = frameState.pop(kind(b))
+        val lhs = frameState.pop(kind(a))
+        (lhs, c.negate, rhs)
       case "Long" =>
         push(a,b) // gen compare
         ???
       case "Double" | "Float" =>
         push(a,b) // gen compare
         c match {
-          case Condition.GE | Condition.GT | Condition.EQ | Condition.NE => genCompareOp(kind(a), true)
-            Predef.println("cmpl")
+          case Condition.GE | Condition.GT | Condition.EQ | Condition.NE =>
+            genCompareOp(kind(a), true)
           case Condition.LE | Condition.LT =>
             genCompareOp(kind(a), false)
-            Predef.println("cmpg")
         }
         Predef.println("Conditions => in: " + c + " out: " + c.negate)
-        (frameState.ipop(), c.negate, appendConstant(Constant.INT_0))
+        val rhs = appendConstant(Constant.INT_0)
+        (frameState.ipop(), c.negate, rhs)
     }
 
 
     val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(lhs, cond, rhs, true, null)
-    // then
-    lastInstr = thn
-    frameState = frameStateThen
+    // else
+    lastInstr = els
+    frameState = frameStateElse
 
-    frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
+    frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
 
     var exitState = frameState.copy()
     val target = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
@@ -52,11 +54,12 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
      result.fixed
     })
 
-    // else
-    lastInstr = els
-    frameState = frameStateElse
+    // then
+    lastInstr = thn
+    frameState = frameStateThen
 
-    frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
+    frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
+
 
     // The EndNode for the already existing edge.
     val end = currentGraph.add(new EndNode());
