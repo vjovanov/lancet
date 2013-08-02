@@ -485,7 +485,7 @@ public class LancetGraphBuilder {
         frameState.push(kind, append(currentGraph.unique(v)));
     }
 
-    private void genCompareOp(Kind kind, boolean isUnorderedLess) {
+    public void genCompareOp(Kind kind, boolean isUnorderedLess) {
         ValueNode y = frameState.pop(kind);
         ValueNode x = frameState.pop(kind);
         frameState.ipush(append(currentGraph.unique(new NormalizeCompareNode(x, y, isUnorderedLess))));

@@ -18,23 +18,23 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
 
     //Double
     case DoublePlus(lhs,rhs)   =>
-      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
     case DoubleMinus(lhs,rhs)  =>
-      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
     case DoubleTimes(lhs,rhs)  =>
-      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
     case DoubleDivide(lhs,rhs) =>
-      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
 
     // Floating Point
     case FloatPlus(lhs,rhs)    =>
-      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
     case FloatMinus(lhs,rhs)   =>
-      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
     case FloatTimes(lhs,rhs)   =>
-      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
     case FloatDivide(lhs,rhs)  =>
-      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Int, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
 
     // Intenger
     case IntPlus(lhs,rhs)      =>
@@ -50,32 +50,27 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
 
     // Conversions
     case IntToLong(lhs) =>
-      insert(sym)
-      push(lhs)
-      genConvert(ConvertNode.Op.I2L)
-      storeLocal(kind(sym), lookup(sym))
+      convert(sym, lhs, ConvertNode.Op.I2L)
     case IntToFloat(lhs) =>
-      insert(sym)
-      push(lhs)
-      genConvert(ConvertNode.Op.I2F)
-      storeLocal(kind(sym), lookup(sym))
+      convert(sym, lhs, ConvertNode.Op.I2F)
     case IntToDouble(lhs) =>
-      insert(sym)
-      push(lhs)
-      genConvert(ConvertNode.Op.I2D)
-      storeLocal(kind(sym), lookup(sym))
+      convert(sym, lhs, ConvertNode.Op.I2D)
     case FloatToInt(lhs) =>
-      insert(sym)
-      push(lhs)
-      genConvert(ConvertNode.Op.F2I)
-      storeLocal(kind(sym), lookup(sym))
+      convert(sym, lhs, ConvertNode.Op.F2I)
     case FloatToDouble(lhs) =>
-      insert(sym)
-      push(lhs)
-      genConvert(ConvertNode.Op.F2D)
-      storeLocal(kind(sym), lookup(sym))
-
+      convert(sym, lhs, ConvertNode.Op.F2D)
+    case DoubleToInt(lhs) =>
+      convert(sym, lhs, ConvertNode.Op.D2I)
+    case DoubleToFloat(lhs) =>
+      convert(sym, lhs, ConvertNode.Op.D2F)
 
     case _ => super.emitNode(sym, rhs)
+  }
+
+  private final def convert(sym: Sym[_], lhs: Exp[_], op: ConvertNode.Op) = {
+    insert(sym)
+    push(lhs)
+    genConvert(op)
+    storeLocal(kind(sym), lookup(sym))
   }
 }

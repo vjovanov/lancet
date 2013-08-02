@@ -105,6 +105,7 @@ trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with
         val tmp59     =      tmp58 + 1
         val tmp60     =      tmp59 + 1
         val (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19) = (1,2,3,4,5, 1,2,3,4,5, 1,2,3,4,5, 1,2,3,4)
+        val (tt1, tt2, tt3, tt4, tt5, tt6, tt7, tt8, tt9, tt10, tt11, tt12, tt13, tt14, tt15, tt16, tt17, tt18, tt19) = (1,2,3,4,5, 1,2,3,4,5, 1,2,3,4,5, 1,2,3,4)
         params(tmp5,tmp4,tmp40)
         tmp40
       }
@@ -145,9 +146,19 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
   def testIf = withOutFile(prefix+"-if") {
     trait Prog extends DSL {
-      def main(x: Rep[Int]): Rep[Int] = if (x < 0) x + 42 else x - 42
+      def main(x: Rep[Int]): Rep[Int] = {
+        val cond = x < 0
+        println(cond)
+        if (cond) x + 42 else x - 42
+      }
     }
     val f = (new Prog with Impl).function
+
+    println(f(10))
+    println(f(-42))
+    println(f(42))
+    println(f(0))
+
     assert(f(10) == -32)
     assert(f(-42) == 0)
     assert(f(42) == 0)

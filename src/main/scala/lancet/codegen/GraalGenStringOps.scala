@@ -16,12 +16,19 @@ trait GraalGenStringOps extends GraalNestedCodegen with GraalBuilder {
       rhs match {
         case StringPlus(s1,s2)       =>
           insert(sym)
-          if (s2.tp.toString == "java.lang.String") {
-            push(s1, s2)
-            invoke(classOf[String], "concat", classOf[String])
-            storeLocal(kind(sym), lookup(sym))
-          } else {
-            ???
+          s2.tp.toString match {
+            case "java.lang.String" =>
+              push(s1, s2)
+              invoke(classOf[String], "concat", classOf[String])
+              storeLocal(kind(sym), lookup(sym))
+            case "Int" =>
+              push(s1)
+              // push(Const(Conversions), s2)
+              // invoke(lancet.codegen.Conversions.getClass, "i2s", classOf[Int])
+              push(Const("conversion"))
+              invoke(classOf[String], "concat", classOf[String])
+              Predef.println("Store = " + frameState)
+              storeLocal(kind(sym), lookup(sym))
           }
         case StringStartsWith(s1,s2) => ???
         case StringTrim(s)           => ???

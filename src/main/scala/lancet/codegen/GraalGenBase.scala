@@ -164,7 +164,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        GraalOptions.Meter,
        GraalOptions.Time,
        GraalOptions.Dump,
-       "Impl$$anon$9$$anonfun$1.apply$mcII$sp",
+       "Impl$$anon$3$$anonfun$1.apply$mcII$sp",
        System.out,
        List(new GraphPrinterDumpHandler())
       )
@@ -421,7 +421,8 @@ trait GraalBuilder { self: GraalGenBase =>
   def invoke(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
     val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
     val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
-    val graalArgs = frameState.popArguments(resolvedMethod.getSignature().getParameterSlots(true), resolvedMethod.getSignature().getParameterCount(true))
+    val graalArgs = frameState.popArguments(resolvedMethod.getSignature().getParameterSlots(true),
+     resolvedMethod.getSignature().getParameterCount(true))
     genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
 
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
@@ -437,6 +438,28 @@ trait GraalBuilder { self: GraalGenBase =>
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
     lastInstr = nextFirstInstruction
+  }
+
+  def pushToString(s: Exp[_]) = {
+    s.tp.toString match {
+      case  "java.lang.String" =>
+        push(s)
+      case "Int" =>
+        push(Const(Conversions), s)
+        invoke(lancet.codegen.Conversions.getClass, "i2s", classOf[Int])
+      case "Long" =>
+        push(Const(Conversions), s)
+        invoke(lancet.codegen.Conversions.getClass, "l2s", classOf[Long])
+      case "Double" =>
+        push(Const(Conversions), s)
+        invoke(lancet.codegen.Conversions.getClass, "d2s", classOf[Double])
+      case "Float" =>
+        push(Const(Conversions), s)
+        invoke(lancet.codegen.Conversions.getClass, "f2s", classOf[Float])
+      case "Boolean" =>
+        push(Const(Conversions), s)
+        invoke(lancet.codegen.Conversions.getClass, "b2s", classOf[Boolean])
+    }
   }
 
 }

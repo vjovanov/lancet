@@ -15,18 +15,16 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
   override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = rhs match {
     case IfThenElse(c,a,b) =>
       frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
-         insert(sym)
-         push(c)
-         val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, null)
-         // then
-         // here we should have a new lastInstr, and the new frameState
-         lastInstr = thn
-         frameState = frameStateThen
+      insert(sym)
+      push(c)
+      val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, null)
+      // then
+      lastInstr = thn
+      frameState = frameStateThen
 
-         emitBlock(b)
-         push(b.res) // for the return value
-         storeLocal(kind(sym), lookup(sym))
-
+      emitBlock(b)
+      push(b.res) // for the return value
+      storeLocal(kind(sym), lookup(sym))
 
       // appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
       var exitState = frameState.copy()
@@ -35,12 +33,13 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
        val result = new LancetGraphBuilder.Target(target, frameState);
        result.fixed
       })
+
       // else
       lastInstr = els
-      frameState = frameStateElse         
+      frameState = frameStateElse
 
       emitBlock(a)
-      push(a.res) // for the return value
+      push(a.res)
       storeLocal(kind(sym), lookup(sym))
 
       // The EndNode for the already existing edge.
@@ -48,19 +47,19 @@ trait GraalGenIfThenElse extends GraalNestedCodegen with GraalBuilder {
       // The MergeNode that replaces the placeholder.
       val mergeNode = currentGraph.add(new MergeNode());
       appendGoto({ // inlined create target
-      val next = target.next();
+        val next = target.next();
 
-      target.setNext(end);
-      mergeNode.addForwardEnd(end);
-      mergeNode.setNext(next);
+        target.setNext(end);
+        mergeNode.addForwardEnd(end);
+        mergeNode.setNext(next);
 
-         // The EndNode for the newly merged edge.
-         val newEnd = currentGraph.add(new EndNode())
-         val target2 = new LancetGraphBuilder.Target(newEnd, frameState);
-         val result = target2.fixed;
-         exitState.merge(mergeNode, target2.state);
-         mergeNode.addForwardEnd(newEnd);
-         result
+        // The EndNode for the newly merged edge.
+        val newEnd = currentGraph.add(new EndNode())
+        val target2 = new LancetGraphBuilder.Target(newEnd, frameState);
+        val result = target2.fixed;
+        exitState.merge(mergeNode, target2.state);
+        mergeNode.addForwardEnd(newEnd);
+        result
       })
       frameState = exitState
       lastInstr = mergeNode
