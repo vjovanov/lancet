@@ -16,7 +16,7 @@ trait GraalGenStringOps extends GraalNestedCodegen with GraalBuilder {
       rhs match {
         case StringPlus(s1,s2)       =>
           insert(sym)
-          s2.tp.toString match {
+          tpString(s2) match {
             case "java.lang.String" =>
               push(s1, s2)
               invoke(classOf[String], "concat", classOf[String])

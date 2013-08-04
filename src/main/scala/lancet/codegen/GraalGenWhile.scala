@@ -34,21 +34,19 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
 
          // Create phi functions for all local variables and operand stack slots.
          frameState.insertLoopPhis(loopBegin)
-         loopBegin.setStateAfter(frameState.create(4))
+         loopBegin.setStateAfter(frameState.create(0))
 
          val loopFristInstr = loopBegin
          val loopBlockState = frameState.copy()
 
          frameState = loopBlockState
          lastInstr = loopBegin
-         // clearLocals(frameState)(1, 2, 3)
          frameState.cleanupDeletedPhis();
 
-         // [begin] load the condition variables
+         // [begin] condition
          emitBlock(c)
          push(c.res)
-         // [end]
-         // clearLocals(liveOut)
+         // [end] condition
 
          val ((thn, frameStateThen), (els, frameStateElse)) =
            ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, (loopBegin, loopBlockState));
@@ -56,7 +54,6 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
          // starting the body (else block)
          frameState = frameStateElse // should the loop block state go here?
          lastInstr = els
-         // clearLocals(frameState)(1, 2, 3)
          frameState.cleanupDeletedPhis();
 
          // [begin] body

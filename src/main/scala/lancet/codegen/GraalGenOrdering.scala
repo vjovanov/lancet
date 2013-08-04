@@ -17,13 +17,13 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
   def condition(c: Condition)(sym: Sym[_], a: Exp[_], b: Exp[_]): Unit = {
     assert(kind(a) == kind(b), "Can not compare different primitive types!!!")
     insert(sym)
-    val (lhs, cond, rhs) = a.tp.toString match {
-      case "Int"  =>
+    val (lhs, cond, rhs) = kind(a) match {
+      case Kind.Int  =>
         push(a, b)
         val rhs = frameState.pop(kind(b))
         val lhs = frameState.pop(kind(a))
         (lhs, c.negate, rhs)
-      case "Long" =>
+      case Kind.Long =>
         push(a,b) // gen compare
         c match {
           case Condition.GE | Condition.GT | Condition.EQ | Condition.NE =>
@@ -33,7 +33,7 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
         }
         val rhs = appendConstant(Constant.INT_0)
         (frameState.ipop(), c.negate, rhs)
-      case "Double" | "Float" =>
+      case Kind.Double | Kind.Float =>
         push(a,b) // gen coempare
         c match {
           case Condition.GE | Condition.GT | Condition.EQ | Condition.NE =>

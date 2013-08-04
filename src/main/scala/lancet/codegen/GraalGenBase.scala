@@ -81,12 +81,10 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
 
     // initialize the stack with function arguments
     args.foreach(insert)
+
     // initialize the graph builder state
     graphBuilder.init(new StructuredGraph(method))
-    // Construction
     lastInstr = graph.start()
-    // TODO we might need the minimum tracking of live variables in blocks
-    //clearLocals(frameState)()
     // finish the start block
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0));
 
@@ -119,11 +117,8 @@ trait GraalCompile { self: GEN_Graal_LMS =>
   val target = HotSpotGraalRuntime.getInstance().getTarget();
   val cache = HotSpotGraalRuntime.getInstance().getCache();
 
-  def compile[A, B](f: A => B): A => B = {
-    // TODO reflectively create a function class with an adequate number of params (check with tiark)
-    // compile the IR that you have to this function
-    val cls = f.getClass
-    val reflectMeth = cls.getDeclaredMethod("apply$mcII$sp", classOf[Int])
+  // T must be a function
+  def compile0(c: Class[_], reflectMeth: Method): InstalledCode = {
     val method = runtime.lookupJavaMethod(reflectMeth)
 
     val plan = new PhasePlan()
@@ -147,8 +142,15 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       res
     }
 
-    val compiledMethod = runtime.addMethod(method, result, null)
-    assert(compiledMethod != null);
+    val resMethod = runtime.addMethod(method, result, null)
+    assert(resMethod != null);
+    resMethod
+  }
+
+  def compile[A, B](f: A => B): A => B = {
+    val cls = f.getClass
+    val reflectMeth = cls.getDeclaredMethod("apply$mcII$sp", classOf[Int])
+    val compiledMethod = compile0(cls, reflectMeth)
 
     { (x:A) =>
       val y = compiledMethod.executeVarargs(f, x.asInstanceOf[AnyRef])
@@ -355,13 +357,16 @@ trait GraalBuilder { self: GraalGenBase =>
   import IR._
   import graphBuilder._
 
-  val stackPos: MMap[Sym[Any], Int] = new MHashMap()
-  var stackSize: Int = 0 // separate from stackPos since Double and Long take 2 spots
+  val localsPos: MMap[Sym[Any], Int] = new MHashMap()
+  // separate from localsPos since Double and Long take 2 spots
+  // starts from 1 because of the `this` pointer
+  var localsSize: Int = 1
 
-  def kind(e: Exp[Any]): Kind = e match {
-    case _ if e.tp.erasure == classOf[Variable[Any]] => kind(e.tp.typeArguments.head.toString)
-    case _ => kind(e.tp.toString)
+  def tpString(e: Exp[Any]): String = e match {
+    case _ if e.tp.erasure == classOf[Variable[Any]] => e.tp.typeArguments.head.toString
+    case _ => e.tp.toString
   }
+  def kind(e: Exp[Any]): Kind = kind(tpString(e))
 
   def kind(e: String): Kind = e match {
     case "Boolean"=> Kind.Boolean
@@ -373,7 +378,7 @@ trait GraalBuilder { self: GraalGenBase =>
     case "Float"  => Kind.Float
     case "Double" => Kind.Double
     case "Unit"   => Kind.Void
-    case _        => Kind.Object
+    case _        => Kind.Object;
   }
 
   def operation(sym: Sym[_])(node: Seq[ValueNode] => ValueNode): Unit = {
@@ -406,20 +411,22 @@ trait GraalBuilder { self: GraalGenBase =>
   }
 
   def lookup(s: Sym[Any]): Int = {
-    assert(stackPos.contains(s), s"Symbol ($s) must have a stack position allocated before its usage. Use function insert(s: Sym[Any]).")
-    stackPos(s)
+    assert(localsPos.contains(s), s"Symbol ($s) must have a stack position allocated before its usage. Use function insert(s: Sym[Any]).")
+    localsPos(s)
   }
 
-  def insert(s: Sym[Any], pos: Int): Unit =
-    if(!stackPos.contains(s)) stackPos += (s -> pos)
+  def insert(s: Sym[Any], pos: Sym[Any]): Unit =
+    if(!localsPos.contains(s)) {
+      localsPos += (s -> lookup(pos))
+    }
 
-  def insert(s: Sym[Any]): Unit = s.tp.toString match {
+  def insert(s: Sym[Any]): Unit = tpString(s) match {
     case "Double" | "Long" =>
-      stackSize += 2
-      insert(s, stackSize - 1)
+      localsPos += (s -> localsSize)
+      localsSize += 2
     case _ =>
-      stackSize += 1
-      insert(s, stackSize)
+      localsPos += (s -> localsSize)
+      localsSize += 1
   }
 
   def clearLocals(fs: FrameStateBuilder)(locals: Int*) = {
@@ -451,7 +458,7 @@ trait GraalBuilder { self: GraalGenBase =>
   }
 
   def pushToString(s: Exp[_]) = {
-    s.tp.toString match {
+    tpString(s) match {
       case  "java.lang.String" =>
         push(s)
       case "Int" =>

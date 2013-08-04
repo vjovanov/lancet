@@ -18,21 +18,21 @@ trait GraalGenNumbericOps extends GraalGenBase with GraalBuilder {
     // Intenger
     case NumericPlus(lhs,rhs)      =>
       operation(sym){x =>
-        val node = sym.tp.toString match {
+        val node = tpString(sym) match {
           case "Int" =>
             new IntegerAddNode(Kind.Int, x(0), x(1))
           case "Long" =>
             new IntegerAddNode(Kind.Long, x(0), x(1))
           case "Double" =>
-            new FloatAddNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
-          case "Float" =>
             new FloatAddNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))
+          case "Float" =>
+            new FloatAddNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
         }
         graph.unique(node)
       }
     case NumericTimes(lhs,rhs)      =>
       operation(sym){x =>
-        val node = sym.tp.toString match {
+        val node = tpString(sym) match {
           case "Int" =>
             new IntegerMulNode(Kind.Int, x(0), x(1))
           case "Long" =>
@@ -47,7 +47,7 @@ trait GraalGenNumbericOps extends GraalGenBase with GraalBuilder {
 
     case NumericMinus(lhs,rhs)      =>
       operation(sym){x =>
-        val node = sym.tp.toString match {
+        val node = tpString(sym) match {
           case "Int" =>
             new IntegerSubNode(Kind.Int, x(0), x(1))
           case "Long" =>

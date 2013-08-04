@@ -488,6 +488,7 @@ public class LancetGraphBuilder {
     public void genCompareOp(Kind kind, boolean isUnorderedLess) {
         ValueNode y = frameState.pop(kind);
         ValueNode x = frameState.pop(kind);
+        // TODO clean
         System.out.println("Compare: " + x + " " + y + ".");
         frameState.ipush(append(currentGraph.unique(new NormalizeCompareNode(x, y, isUnorderedLess))));
     }
@@ -529,7 +530,8 @@ public class LancetGraphBuilder {
             throw new RuntimeException("Not done yet");
             // return;
         }
-
+        System.out.println(x);
+        System.out.println(y);
         double probability = 0.5;
 
         // the mirroring and negation operations get the condition into canonical form

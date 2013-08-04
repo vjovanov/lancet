@@ -60,6 +60,8 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
     case FloatToDouble(lhs) =>
       convert(sym, lhs, ConvertNode.Op.F2D)
     case DoubleToInt(lhs) =>
+      Predef.println(lookup(lhs.asInstanceOf[Sym[_]]))
+      Predef.println(frameState)
       convert(sym, lhs, ConvertNode.Op.D2I)
     case DoubleToFloat(lhs) =>
       convert(sym, lhs, ConvertNode.Op.D2F)
