@@ -90,15 +90,15 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
     // finish the start block
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0));
 
-    frameState.cleanupDeletedPhis();
-    frameState.setRethrowException(false);
+    frameState.cleanupDeletedPhis()
+    frameState.setRethrowException(false)
 
     // LMS code generation
     emitBlock(body)
     push(body.res) // push the block result for the return
 
-    frameState.cleanupDeletedPhis();
-    frameState.setRethrowException(false);
+    frameState.cleanupDeletedPhis()
+    frameState.setRethrowException(false)
 
     val node = frameState.pop(kind(body.res)) // TODO make an abstraction here with symbols
     frameState.clearStack();
@@ -142,12 +142,13 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
       val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
-
+      assert(res != null);
 
       res
     }
 
     val compiledMethod = runtime.addMethod(method, result, null)
+    assert(compiledMethod != null);
 
     { (x:A) =>
       val y = compiledMethod.executeVarargs(f, x.asInstanceOf[AnyRef])
@@ -262,7 +263,8 @@ trait GraalGenBase extends BlockTraversal {
   // ----------
 
   override def traverseStm(stm: Stm) = stm match {
-    case TP(sym, rhs) => emitNode(sym,rhs)
+    case TP(sym, rhs) =>
+      emitNode(sym,rhs)
     case _ => throw new GenerationFailedException("don't know how to generate code for statement: " + stm)
   }
 
@@ -354,6 +356,7 @@ trait GraalBuilder { self: GraalGenBase =>
   import graphBuilder._
 
   val stackPos: MMap[Sym[Any], Int] = new MHashMap()
+  var stackSize: Int = 0 // separate from stackPos since Double and Long take 2 spots
 
   def kind(e: Exp[Any]): Kind = e match {
     case _ if e.tp.erasure == classOf[Variable[Any]] => kind(e.tp.typeArguments.head.toString)
@@ -410,7 +413,14 @@ trait GraalBuilder { self: GraalGenBase =>
   def insert(s: Sym[Any], pos: Int): Unit =
     if(!stackPos.contains(s)) stackPos += (s -> pos)
 
-  def insert(s: Sym[Any]): Unit = insert(s, stackPos.size + 1)
+  def insert(s: Sym[Any]): Unit = s.tp.toString match {
+    case "Double" | "Long" =>
+      stackSize += 2
+      insert(s, stackSize - 1)
+    case _ =>
+      stackSize += 1
+      insert(s, stackSize)
+  }
 
   def clearLocals(fs: FrameStateBuilder)(locals: Int*) = {
     val removeLocals = new BitSet()

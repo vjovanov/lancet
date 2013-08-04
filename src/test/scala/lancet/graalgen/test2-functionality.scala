@@ -69,11 +69,45 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
         val i: Rep[Int] = v
         val d: Rep[Double] = v.toDouble
         val f: Rep[Float] = v.toFloat
+        val l: Rep[Long] = int_tolong(v)
         println("Int Arithmetics:")
-        println(i + 1) // 2
-        println(1 + i) // 2
+        println(i + 1)
+        println(1 + i)
+        println(i + d)
+        println(i + f)
+        // println(i + l) // does not typecheck
+
+        println(i * 2)
+        println(2 * i)
+        println(i * d)
+        println(i * f)
+
         println("Double Arithmetics:")
-        println(i + d) // 2.0D
+        println(d + 1)
+        println(1 + d)
+        println(d + i)
+        println(d + f)
+
+        println(d    * 2.0D)
+        println(2.0F * d)
+        println(d    * i)
+        println(d    * f)
+
+        println("Float Arithmetics:")
+        println(f    + 1.0F)
+        println(1.0F + f)
+        println(f    + i)
+        println(f    + d)
+
+        println(f    * 2.0F)
+        println(2.0F * f )
+        println(f    * i)
+        println(f    * d)
+
+        println("Long Arithmetics:")
+        println(l    + 1L)
+        println(l    * unit(2L))
+
         v
       }
     }
@@ -86,10 +120,12 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
 
   def testConditions = withOutFile(prefix + "-conditions") {
     trait Prog extends DSL {
+
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
-        // val f: Rep[Float] = v.toFloat
-        // val d: Rep[Double] = v.toDouble
+        val l: Rep[Long] = int_tolong(v)
+        val f: Rep[Float] = v.toFloat
+        val d: Rep[Double] = v.toDouble
         // Int
         println("Int:")
         if(i > i - 1) println("OK!") else println("ERROR!")
@@ -102,11 +138,35 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
         if(i <= i - 1) println("ERROR!") else println("OK!")
 
         // Double
-        // This fails with because of nulls in the frameStateBuilder. Where do they come from???
-        // val x = d < d
-        // val y = d > d
-        // println(x)
-        // println(y)
+        println("Double:")
+        if(d > d - 1) println("OK!") else println("ERROR!")
+        if(d > d) println("ERROR!") else println("OK!")
+        if(d < d + 1) println("OK!") else println("ERROR!")
+        if(d < d) println("ERROR!") else println("OK!")
+        if(d >= d) println("OK!") else println("ERROR!")
+        if(d >= d + 1) println("ERROR!") else println("OK!")
+        if(d <= d) println("OK!") else println("ERROR!")
+        if(d <= d - 1) println("ERROR!") else println("OK!")
+
+        println("Float:")
+        // if(f > f - 1) println("OK!") else println("ERROR!")
+        if(f > f) println("ERROR!") else println("OK!")
+        // if(f < f + 1) println("OK!") else println("ERROR!")
+        if(f < f) println("ERROR!") else println("OK!")
+        if(f >= f) println("OK!") else println("ERROR!")
+        // if(f >= f + 1) println("ERROR!") else println("OK!")
+        if(f <= f) println("OK!") else println("ERROR!")
+        // if(f <= f - 1) println("ERROR!") else println("OK!")
+
+        println("Long:")
+        if(l > l - unit(1)) println("OK!") else println("ERROR!")
+        if(l > l) println("ERROR!") else println("OK!")
+        if(l < l + 1) println("OK!") else println("ERROR!")
+        if(l < l) println("ERROR!") else println("OK!")
+        if(l >= l) println("OK!") else println("ERROR!")
+        if(l >= l + 1) println("ERROR!") else println("OK!")
+        if(l <= l) println("OK!") else println("ERROR!")
+        if(l <= l - unit(1)) println("ERROR!") else println("OK!")
         v
       }
     }

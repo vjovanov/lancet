@@ -21,23 +21,22 @@ trait GraalGenMiscOps extends GraalNestedCodegen with GraalBuilder {
   import IR._
   import graphBuilder._
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
-    rhs match {
-      case PrintF(f,x) => ???//emitValDef(sym, "printf(" + (f::x.map(quote)).mkString(",") + ")")
-      case PrintLn(s)  =>
-        insert(sym)
-        push(Const(Predef))
-        pushToString(s)
-        invoke(Predef.getClass, "println", classOf[Any])
-      case Print(s)    =>
-        insert(sym)
-        push(Const(Predef))
-        pushToString(s)
-        invoke(Predef.getClass, "print", classOf[Any])
-      case Exit(a)     => ???//emitValDef(sym, "exit(" + quote(a) + ")")
-      case Return(x)   => ???//emitValDef(sym, "return " + quote(x))
-      case Error(s)    => ???//emitValDef(sym, "error(" + quote(s) + ")")
-      case _ => super.emitNode(sym, rhs)
-    }
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
+    case PrintF(f,x) => ???//emitValDef(sym, "printf(" + (f::x.map(quote)).mkString(",") + ")")
+    case PrintLn(s)  =>
+      insert(sym)
+      push(Const(Predef))
+      pushToString(s)
+      invoke(Predef.getClass, "println", classOf[Any])
+    case Print(s)    =>
+      insert(sym)
+      push(Const(Predef))
+      pushToString(s)
+      invoke(Predef.getClass, "print", classOf[Any])
+    case Exit(a)     => ???//emitValDef(sym, "exit(" + quote(a) + ")")
+    case Return(x)   => ???//emitValDef(sym, "return " + quote(x))
+    case Error(s)    => ???//emitValDef(sym, "error(" + quote(s) + ")")
+    case _ => super.emitNode(sym, rhs)
   }
+
 }

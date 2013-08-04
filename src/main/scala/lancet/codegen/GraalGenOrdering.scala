@@ -25,16 +25,22 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
         (lhs, c.negate, rhs)
       case "Long" =>
         push(a,b) // gen compare
-        ???
-      case "Double" | "Float" =>
-        push(a,b) // gen compare
         c match {
           case Condition.GE | Condition.GT | Condition.EQ | Condition.NE =>
             genCompareOp(kind(a), true)
           case Condition.LE | Condition.LT =>
             genCompareOp(kind(a), false)
         }
-        Predef.println("Conditions => in: " + c + " out: " + c.negate)
+        val rhs = appendConstant(Constant.INT_0)
+        (frameState.ipop(), c.negate, rhs)
+      case "Double" | "Float" =>
+        push(a,b) // gen coempare
+        c match {
+          case Condition.GE | Condition.GT | Condition.EQ | Condition.NE =>
+            genCompareOp(kind(a), true)
+          case Condition.LE | Condition.LT =>
+            genCompareOp(kind(a), false)
+        }
         val rhs = appendConstant(Constant.INT_0)
         (frameState.ipop(), c.negate, rhs)
     }
@@ -46,7 +52,6 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
     frameState = frameStateElse
 
     frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
-
     var exitState = frameState.copy()
     val target = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
     appendGoto({ // inlined create target
@@ -57,9 +62,7 @@ trait GraalGenOrderingOps extends GraalNestedCodegen with GraalBuilder {
     // then
     lastInstr = thn
     frameState = frameStateThen
-
     frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
-
 
     // The EndNode for the already existing edge.
     val end = currentGraph.add(new EndNode());

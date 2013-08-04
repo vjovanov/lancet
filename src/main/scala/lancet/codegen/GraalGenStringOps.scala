@@ -27,7 +27,6 @@ trait GraalGenStringOps extends GraalNestedCodegen with GraalBuilder {
               // invoke(lancet.codegen.Conversions.getClass, "i2s", classOf[Int])
               push(Const("conversion"))
               invoke(classOf[String], "concat", classOf[String])
-              Predef.println("Store = " + frameState)
               storeLocal(kind(sym), lookup(sym))
           }
         case StringStartsWith(s1,s2) => ???
