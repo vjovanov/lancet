@@ -154,17 +154,8 @@ trait KMeansImpl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveEx
   val function = codegen.compileKMeans(codegen.f)
 }
 
-class TestPerformance extends FileDiffSuite with GraalGenBase {
-
-  val prefix = "test-out/test-graalgen-performance"
-
-  def testKMeans = withOutFile(prefix+"-kmeans") {
-
-    withOutFile(prefix+"-kmeans") {
-      trait Prog extends DSL {
-        def main(p: Rep[Int]): Rep[Int] = 1
-
-        def constructNearestClusterVector(v: Rep[Array[Double]], x: Rep[Array[Double]], x_row: Rep[Int], x_col: Rep[Int], mu: Rep[Array[Double]], mu_row: Rep[Int], mu_col: Rep[Int]): Unit = {
+trait NearestCluster extends DSL {
+  def constructNearestClusterVector(v: Rep[Array[Int]], x: Rep[Array[Double]], x_row: Rep[Int], x_col: Rep[Int], mu: Rep[Array[Double]], mu_row: Rep[Int], mu_col: Rep[Int]): Unit = {
           var dist = 0.0D
           var min_d = 0.0D
           var min_j = 0
@@ -188,48 +179,64 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
              val lhs = min_d < -0.5
              val rhs = dist < min_d
              val cond = if (lhs == unit(false)) {
-               if(__equal(rhs, unit(false))) {
+               if(rhs == unit(false)) {
                  unit(false)
                } else unit(true) // TODO elsless if
              } else unit(true)
              if(cond) {min_d = dist; min_j = j} else unit(()) // TODO ImplicitConvert
              j = j + 1
            }
-           v(i) = min_j.toFloat.toDouble // TODO ImplicitConvert and this breaks the value node
+           v(i) = min_j // TODO ImplicitConvert and this breaks the value node
            i = i + 1
          }
-        }
+  }
+}
 
-       def computeNewCentroids(v: Rep[Array[Double]], x: Rep[Array[Double]], x_row: Rep[Int], x_col: Rep[Int], mu: Rep[Array[Double]], mu_row: Rep[Int], mu_col: Rep[Int]): Unit = {
+trait ComputCentroids extends DSL {
+  def computeNewCentroids(v: Rep[Array[Int]], x: Rep[Array[Double]], x_row: Rep[Int], x_col: Rep[Int], mu: Rep[Array[Double]], mu_row: Rep[Int], mu_col: Rep[Int]): Unit = {
 
-         // if (!(x_row*x_col == x.length)) return;
-         // if (!(mu_row * mu_col == mu.length)) return;
+    // if (!(x_row*x_col == x.length)) return;
+    // if (!(mu_row * mu_col == mu.length)) return;
 
-         val weightedPoints = NewArray[Double](x_col)
-         var i = 0
-         while(i < mu_row) {
-          var j = 0
-          while(j < x_col) {weightedPoints(j) = 0.0D; j = j + 1}
-          var points = 0
-          j = 0
-          while(j < x_row) {
-            if(Math.abs(v(j) - i.toFloat.toDouble) < 1e-8D) {
-              var k = 0
-              while(k < x_col) {
-                weightedPoints(k) = weightedPoints(k) + x(j * x_col + k)
-                k = k + 1
-              }
-              points = points + 1;
-            }
-            j = j + 1
-          }
-          if(points == 0) points = points + 1;
-          j = 0
-          while(j < mu_col) { mu(i * mu_col + j) = weightedPoints(j) / points.toFloat.toDouble; j = j + 1 }
-          i= i + 1
+    val weightedPoints = NewArray[Double](x_col)
+    var i = 0
+    while(i < mu_row) {
+     var j = 0
+     while(j < x_col) {weightedPoints(j) = 0.0D; j = j + 1}
+       var points = 0
+       j = 0
+       while(j < x_row) {
+         if(v(j) - i == 0) {
+           var k = 0
+           while(k < x_col) {
+             weightedPoints(k) = weightedPoints(k) + x(j * x_col + k)
+             k = k + 1
+           }
+           points = points + 1;
          }
+         j = j + 1
+       }
+       if(points == 0) points = points + 1 else ()
+       j = 0
+       while(j < mu_col) {
+         mu(i * mu_col + j) = weightedPoints(j) / points.toFloat.toDouble;
+         j = j + 1
        }
 
+      i= i + 1
+    }
+  }
+}
+
+class TestPerformance extends FileDiffSuite with GraalGenBase {
+
+  val prefix = "test-out/test-graalgen-performance"
+
+  def testKMeans = withOutFile(prefix+"-kmeans") {
+
+    withOutFile(prefix+"-kmeans") {
+      trait Prog extends NearestCluster with ComputCentroids {
+        def main(p: Rep[Int]): Rep[Int] = 1
 
         def main(x: Rep[Array[Double]], x_col: Rep[Int], mu: Rep[Array[Double]], mu_col: Rep[Int]): Rep[Array[Double]] = {
               val tol = 0.001D
@@ -240,24 +247,21 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
               val oldmu = NewArray[Double](mu_row * mu_col)
 
               // System.out.println("Kmeans starting Computation")
-
               // long now = System.currentTimeMillis()
               var diff = tol + 1.0D
-              val c = NewArray[Double](x_row)
+              val c = NewArray[Int](x_row)
               var iter = 0
               while (diff > tol) {
                 iter = iter + 1
                 array_copy(mu, 0, oldmu, 0, mu_row * mu_col)
-
                 constructNearestClusterVector(c, x, x_row, x_col, mu, mu_row, mu_col)
                 computeNewCentroids(c, x, x_row, x_col, mu, mu_row, mu_col)
-
                 diff = 0.0D
                 var i = 0
                 while(i < mu_row) {
                   var j = 0
                   while(j < mu_col) {
-                     diff = diff + Math.abs(mu(i * mu_col + j) - oldmu(i *mu_col + j))
+                    diff = diff + Math.abs(mu(i * mu_col + j) - oldmu(i * mu_col + j))
                     j = j + 1
                   }
                   i = i + 1
@@ -269,9 +273,8 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
       withOutFile(prefix+"-kmeans") {
         val f = (new Prog with KMeansImpl).function
 
-        withOutFile(prefix+"-kmeans-out") {
-          // TODO Read from a file
-          println(f(Array(300), 3, Array(9), 3).mkString(","))
+        withOutFileChecked(prefix+"-kmeans-out") {
+          println(f(Array.tabulate(1001)(i => scala.math.pow(0.963789D, i) + .23123D * i), 3, Array.tabulate(9)(i => i * 2.123123D), 3).mkString("centers[",",", "]"))
         }
       }
     }

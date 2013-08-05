@@ -15,13 +15,17 @@ trait ScalaGenBooleanOps extends GraalGenBase with GraalBuilder {
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case BooleanNegate(b)    => ???//emitValDef(sym, "!" + quote(b))
     case BooleanAnd(lhs,rhs) => ???
-
+      // if (lhs == 1) {
+      //   if(rhs == 1) {
+      //     1
+      //   }
+      // } else 0
     case BooleanOr(lhs,rhs)  => ???
       // if (lhs == 0) {
       //   if(rhs == 0) {
       //     0
-      //   } else 1
-      // } else 1
+      //   }
+      // } else 0
     case _ => super.emitNode(sym,rhs)
   }
 }

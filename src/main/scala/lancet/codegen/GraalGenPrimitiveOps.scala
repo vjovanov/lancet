@@ -24,7 +24,7 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
     case DoubleTimes(lhs,rhs)  =>
       operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
     case DoubleDivide(lhs,rhs) =>
-      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatDivNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
 
     // Floating Point
     case FloatPlus(lhs,rhs)    =>
@@ -34,7 +34,7 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
     case FloatTimes(lhs,rhs)   =>
       operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
     case FloatDivide(lhs,rhs)  =>
-      operation(sym)(x => append(graph.unique(new FloatRemNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(graph.unique(new FloatDivNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
 
     // Intenger
     case IntPlus(lhs,rhs)      =>
