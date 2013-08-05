@@ -4,8 +4,12 @@ import scala.virtualization.lms.util.OverloadHack
 import scala.virtualization.lms.common._
 import scala.reflect.SourceContext
 import com.oracle.graal.api.meta._
-import com.oracle.graal.nodes._
 import com.oracle.graal.nodes.calc._
+
+object LancetSystem {
+  def arraycopy(a: Any, b: Int, c: Any, d: Int, e: Int) =
+    _root_.java.lang.System.arraycopy(a,b,c,d,e)
+}
 
 trait GraalGenArrayOps extends GraalNestedCodegen with GraalBuilder {
   val IR: ArrayOpsExp
@@ -17,7 +21,17 @@ trait GraalGenArrayOps extends GraalNestedCodegen with GraalBuilder {
     case a@ArrayNew(n) =>
       insert(sym)
       push(n)
-      genNewPrimitiveArray(4) // TODO make a manifest based case
+      val code = sym.tp.typeArguments.head.toString match {
+        case "Long" => 11
+        case "Int" => 10
+        case "Short" => 9
+        case "Byte" => 8
+        case "Double" => 7
+        case "Float" => 6
+        case "Char" => 5
+        case "Boolean" => 4
+      }
+      genNewPrimitiveArray(code)
       storeLocal(Kind.Object, lookup(sym))
     case ArrayApply(x,n) =>
       insert(sym)
@@ -37,6 +51,10 @@ trait GraalGenArrayOps extends GraalNestedCodegen with GraalBuilder {
       storeLocal(Kind.Int, lookup(sym))
     case ArrayForeach(a,x,block) =>
     case ArrayCopy(src,srcPos,dest,destPos,len) =>
+      insert(sym)
+      push(Const(LancetSystem))
+      push(src,srcPos,dest,destPos,len)
+      invoke(LancetSystem.getClass, "arraycopy", classOf[Any], classOf[Int], classOf[Any], classOf[Int], classOf[Int] )
     case a@ArraySort(x) =>
     case n@ArrayMap(a,x,blk) =>
     case ArrayToSeq(a) =>

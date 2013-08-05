@@ -38,9 +38,9 @@ trait GraalGenNumbericOps extends GraalGenBase with GraalBuilder {
           case "Long" =>
             new IntegerMulNode(Kind.Long, x(0), x(1))
           case "Double" =>
-            new FloatMulNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
-          case "Float" =>
             new FloatMulNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))
+          case "Float" =>
+            new FloatMulNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
         }
         graph.unique(node)
       }
@@ -53,9 +53,9 @@ trait GraalGenNumbericOps extends GraalGenBase with GraalBuilder {
           case "Long" =>
             new IntegerSubNode(Kind.Long, x(0), x(1))
           case "Double" =>
-            new FloatSubNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
-          case "Float" =>
             new FloatSubNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))
+          case "Float" =>
+            new FloatSubNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
         }
         graph.unique(node)
       }

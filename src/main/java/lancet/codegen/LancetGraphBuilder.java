@@ -202,6 +202,8 @@ public class LancetGraphBuilder {
     }
 
     protected void storeLocal(Kind kind, int index) {
+        System.out.println("Kind: " + kind);
+        System.out.println("Store: " + frameState);
         frameState.storeLocal(index, frameState.pop(kind));
     }
 
@@ -1069,6 +1071,7 @@ public class LancetGraphBuilder {
             deoptimize.setMessage(targetMethod.getName());
             append(deoptimize);
             frameState.pushReturn(resultType, ConstantNode.defaultForKind(resultType, currentGraph));
+            System.out.println("DeoptALot after push return: " + frameState);
             return;
         }
 
@@ -1081,13 +1084,16 @@ public class LancetGraphBuilder {
         // otherwise)
         if (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
             ValueNode result = appendWithBCI(currentGraph.add(new InvokeNode(callTarget, bci())));
+            System.out.println("Result: " + result);
+            System.out.println("Probability before push return: " + frameState);
             frameState.pushReturn(resultType, result);
-
+            System.out.println("Probability after push return: " + frameState);
         } else {
             DispatchBeginNode exceptionEdge = handleException(null, bci());
             InvokeWithExceptionNode invoke = currentGraph.add(new InvokeWithExceptionNode(callTarget, exceptionEdge, bci()));
             ValueNode result = append(invoke);
             frameState.pushReturn(resultType, result);
+            System.out.println("After push return: " + frameState);
             Block nextBlock = currentBlock.successors.get(0);
 
             assert bci() == currentBlock.endBci;
@@ -1095,6 +1101,7 @@ public class LancetGraphBuilder {
 
             invoke.setNext(createTarget(nextBlock, frameState));
             invoke.setStateAfter(frameState.create(nextBlock.startBci));
+            throw new RuntimeException("Lancet is not built for this case!!!");
         }
     }
 

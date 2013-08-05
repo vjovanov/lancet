@@ -168,7 +168,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        GraalOptions.Time,
        GraalOptions.Dump,
        "Impl$$anon$10$$anonfun$1.apply$mcII$sp",
-       System.out,
+       _root_.java.lang.System.out,
        List(new GraphPrinterDumpHandler())
       )
     println("GraalOptions.Dump         = " + GraalOptions.Dump)
@@ -436,12 +436,14 @@ trait GraalBuilder { self: GraalGenBase =>
   }
 
   def invoke(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
+    Predef.println("Ivoke:" + frameState)
     val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
     val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
     val graalArgs = frameState.popArguments(resolvedMethod.getSignature().getParameterSlots(true),
      resolvedMethod.getSignature().getParameterCount(true))
+    Predef.println("Before invoke:" + frameState)
     genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
-
+    Predef.println("After invoke:" + frameState)
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
 
     // block stuff
@@ -455,6 +457,7 @@ trait GraalBuilder { self: GraalGenBase =>
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
     lastInstr = nextFirstInstruction
+    Predef.println("Next Block:" + frameState)
   }
 
   def pushToString(s: Exp[_]) = {

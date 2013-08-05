@@ -39,7 +39,7 @@ trait KMeansImpl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveEx
   val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse
     with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps
     with GraalGenEqual with GraalGenStringOps with GraalGenIOOps with GraalGenMiscOps
-    with GraalGenNumbericOps { val IR: self.type = self
+    with GraalGenNumbericOps with GraalGenMathOps { val IR: self.type = self
 
     val f = {(a: Array[Double], b: Int, c: Array[Double], d: Int) => // TODO this is needed for now to trick the FrameStateBuilder.
       val tmp0      =      b
@@ -163,55 +163,117 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
     withOutFile(prefix+"-kmeans") {
       trait Prog extends DSL {
         def main(p: Rep[Int]): Rep[Int] = 1
-        def main(c: Rep[Array[Double]], cCol: Rep[Int], p: Rep[Array[Double]], pCol: Rep[Int]): Rep[Array[Double]] = {
 
-              val tol: Rep[Double] = 0.001
+        def constructNearestClusterVector(v: Rep[Array[Double]], x: Rep[Array[Double]], x_row: Rep[Int], x_col: Rep[Int], mu: Rep[Array[Double]], mu_row: Rep[Int], mu_col: Rep[Int]): Unit = {
+          var dist = 0.0D
+          var min_d = 0.0D
+          var min_j = 0
 
-              val x = NewArray[Double](3);
-              val x_row = x.length/3;
-              val x_col = 3;//x[0].length;
+          // if (!(x_row*x_col == x.length)) return;
+          // if (!(mu_row * mu_col == mu.length)) return;
+         var i = 0
+         while(i < x_row) {
+           min_d = -1.0D // TODO this makes issues
+           min_j = -1
+           var j = 0
+           while(j < mu_row) {
+             dist = 0.0D
+             var k = 0
+             while(k < x_col) {
+               val tmp = x(i*x_col + k) - mu(j* mu_col + k)
+               dist = dist + tmp * tmp
+               k = k + 1
+             }
+             // HACK Why doesn't bytecode have || ???
+             val lhs = min_d < -0.5
+             val rhs = dist < min_d
+             val cond = if (lhs == unit(false)) {
+               if(__equal(rhs, unit(false))) {
+                 unit(false)
+               } else unit(true) // TODO elsless if
+             } else unit(true)
+             if(cond) {min_d = dist; min_j = j} else unit(()) // TODO ImplicitConvert
+             j = j + 1
+           }
+           v(i) = min_j.toFloat.toDouble // TODO ImplicitConvert and this breaks the value node
+           i = i + 1
+         }
+        }
 
-              val mu = NewArray[Double](3);
-              val mu_row = mu.length/3;
-              val mu_col = 3;// mu[0]
+       def computeNewCentroids(v: Rep[Array[Double]], x: Rep[Array[Double]], x_row: Rep[Int], x_col: Rep[Int], mu: Rep[Array[Double]], mu_row: Rep[Int], mu_col: Rep[Int]): Unit = {
 
-              val oldmu = NewArray[Double](mu_row * mu_col);
+         // if (!(x_row*x_col == x.length)) return;
+         // if (!(mu_row * mu_col == mu.length)) return;
 
-              // System.out.println("Kmeans starting Computation");
+         val weightedPoints = NewArray[Double](x_col)
+         var i = 0
+         while(i < mu_row) {
+          var j = 0
+          while(j < x_col) {weightedPoints(j) = 0.0D; j = j + 1}
+          var points = 0
+          j = 0
+          while(j < x_row) {
+            if(Math.abs(v(j) - i.toFloat.toDouble) < 1e-8D) {
+              var k = 0
+              while(k < x_col) {
+                weightedPoints(k) = weightedPoints(k) + x(j * x_col + k)
+                k = k + 1
+              }
+              points = points + 1;
+            }
+            j = j + 1
+          }
+          if(points == 0) points = points + 1;
+          j = 0
+          while(j < mu_col) { mu(i * mu_col + j) = weightedPoints(j) / points.toFloat.toDouble; j = j + 1 }
+          i= i + 1
+         }
+       }
 
-              // long now = System.currentTimeMillis();
-              var diff: Rep[Double] = tol + 1;
-              val c = NewArray[Double](x_row);
+
+        def main(x: Rep[Array[Double]], x_col: Rep[Int], mu: Rep[Array[Double]], mu_col: Rep[Int]): Rep[Array[Double]] = {
+              val tol = 0.001D
+              val x_row = x.length/x_col
+
+              val mu_row = mu.length/mu_col
+
+              val oldmu = NewArray[Double](mu_row * mu_col)
+
+              // System.out.println("Kmeans starting Computation")
+
+              // long now = System.currentTimeMillis()
+              var diff = tol + 1.0D
+              val c = NewArray[Double](x_row)
               var iter = 0
               while (diff > tol) {
-                iter = iter + 1;
-                if (iter > 1000) println("something") else 0
-                //System.arraycopy(mu, 0, oldmu, 0, mu_row * mu_col);
+                iter = iter + 1
+                array_copy(mu, 0, oldmu, 0, mu_row * mu_col)
 
-                // constructNearestClusterVector(c, x, x_row, x_col, mu, mu_row, mu_col)
-                // computeNewCentroids(c, x, x_row, x_col, mu, mu_row, mu_col)
+                constructNearestClusterVector(c, x, x_row, x_col, mu, mu_row, mu_col)
+                computeNewCentroids(c, x, x_row, x_col, mu, mu_row, mu_col)
 
-                diff = 0;
+                diff = 0.0D
                 var i = 0
                 while(i < mu_row) {
-                  var j = 0;
+                  var j = 0
                   while(j < mu_col) {
-                    // TODO diff += Math.abs(mu[i * mu_col + j] - oldmu[i *mu_col + j]);
+                     diff = diff + Math.abs(mu(i * mu_col + j) - oldmu(i *mu_col + j))
                     j = j + 1
                   }
                   i = i + 1
                 }
-                c(0) = c(0) // TODO: to avoid picking it up
-                diff = 0
               }
-              c
+              mu
         }
       }
       withOutFile(prefix+"-kmeans") {
         val f = (new Prog with KMeansImpl).function
-        println(f(Array(3), 3, Array(3), 3))
+
+        withOutFile(prefix+"-kmeans-out") {
+          // TODO Read from a file
+          println(f(Array(300), 3, Array(9), 3).mkString(","))
+        }
       }
     }
   }
-
 }
