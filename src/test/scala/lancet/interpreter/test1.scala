@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
@@ -11,10 +11,10 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see http://www.gnu.org/licenses/agpl.html.
- * 
+ *
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
@@ -42,7 +42,7 @@ class TestInterpreter1 extends FileDiffSuite {
 
     val o = new Foo
 
-    val runtime = HotSpotGraalRuntime.getInstance().getRuntime();
+    val runtime = HotSpotGraalRuntime.graalRuntime().getRuntime();
 
     val cls = o.getClass
     val reflectMeth = cls.getDeclaredMethod("bar", classOf[Int])
@@ -53,7 +53,7 @@ class TestInterpreter1 extends FileDiffSuite {
     it.TRACE_BYTE_CODE = true
 
     val res = it.execute(method, Array[Object](o, 8:Integer))
-    
+
     println("res: " + res)
   }
 
@@ -61,7 +61,7 @@ class TestInterpreter1 extends FileDiffSuite {
   // compile simple
   def testB = withOutFileChecked(prefix+"B") {
 
-    final class Foo { // making class final -- Simple compiler can't resolve call otherwise 
+    final class Foo { // making class final -- Simple compiler can't resolve call otherwise
       def bar(x: Int) = { System.out.println("hello: "+x); 9 }
     }
 
@@ -73,7 +73,7 @@ class TestInterpreter1 extends FileDiffSuite {
 
   }
 */
-  
+
 
 /*
   this takes quite long. profiling data: 73s / 2013-01-30
