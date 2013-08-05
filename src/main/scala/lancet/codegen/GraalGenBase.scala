@@ -36,6 +36,7 @@ import java.lang.reflect.Method
 
 import com.oracle.graal.phases._   // PhasePlan
 import com.oracle.graal.phases.common._
+import com.oracle.graal.phases.tiers._
 import com.oracle.graal.phases.PhasePlan.PhasePosition
 import com.oracle.graal.hotspot._
 import com.oracle.graal.java._
@@ -57,6 +58,8 @@ import com.oracle.graal.debug.internal._
 import com.oracle.graal.printer._
 import com.oracle.graal.api.meta._
 import com.oracle.graal.nodes.calc._
+import com.oracle.graal.api.runtime._
+import com.oracle.graal.nodes.spi._
 
 trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGraph { self: GraalBuilder =>
   val IR: Expressions with Effects
@@ -112,10 +115,10 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
 
 trait GraalCompile { self: GEN_Graal_LMS =>
 
-  val compiler = HotSpotGraalRuntime.getInstance().getCompiler();
-  val backend = HotSpotGraalRuntime.getInstance().getBackend();
-  val target = HotSpotGraalRuntime.getInstance().getTarget();
-  val cache = HotSpotGraalRuntime.getInstance().getCache();
+  val compiler = HotSpotGraalRuntime.graalRuntime().getCompilerToVM();
+  val backend = HotSpotGraalRuntime.graalRuntime().getBackend();
+  val target = HotSpotGraalRuntime.graalRuntime().getTarget();
+  val cache = HotSpotGraalRuntime.graalRuntime().getCache();
 
   // T must be a function
   def compile0(c: Class[_], reflectMeth: Method): InstalledCode = {
@@ -125,7 +128,6 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
     plan.addPhase(PhasePosition.AFTER_PARSING, printGraphPhase("AFTER_PARSING"))
     plan.addPhase(PhasePosition.HIGH_LEVEL, printGraphPhase("HIGH_LEVEL"))
-    plan.addPhase(PhasePosition.MID_LEVEL, printGraphPhase("MID_LEVEL"))
 
     val result = topScope(method) {
       println("To debug use:")
@@ -136,7 +138,21 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       new DeadCodeEliminationPhase().apply(graph)
       Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
-      val res = GraalCompiler.compileMethod(runtime, backend, target, method, graph, cache, plan, OptimisticOptimizations.ALL)
+      var res = GraalCompiler.compileGraph(
+        graph,
+        CodeUtil.getCallingConvention(runtime, CallingConvention.Type.JavaCallee, method, false),
+        method,
+        runtime,
+        Graal.getRequiredCapability(classOf[Replacements]),
+        backend,
+        target,
+        cache,
+        plan,
+        OptimisticOptimizations.ALL,
+        new SpeculationLog(),
+        Suites.createDefaultSuites(),
+        new CompilationResult()
+      )
       assert(res != null);
 
       res
@@ -161,18 +177,17 @@ trait GraalCompile { self: GEN_Graal_LMS =>
   // --------- Util
 
   def topScope[A](method: ResolvedJavaMethod)(body: => A) = {
-
+    import GraalDebugConfig._
     val hotspotDebugConfig =
-      new GraalDebugConfig(GraalOptions.Log,
-       GraalOptions.Meter,
-       GraalOptions.Time,
-       GraalOptions.Dump,
-       "Impl$$anon$10$$anonfun$1.apply$mcII$sp",
+      new GraalDebugConfig(
+       Log.getValue(),
+       Meter.getValue(),
+       Time.getValue(),
+       Dump.getValue(),
+       "Impl$$anon$10$$anonfun$1.apply$mcII$sp",// MethodFilter.getValue()
        _root_.java.lang.System.out,
        List(new GraphPrinterDumpHandler())
       )
-    println("GraalOptions.Dump         = " + GraalOptions.Dump)
-    println("GraalOptions.MethodFilter = " + GraalOptions.MethodFilter)
     Debug.setConfig(hotspotDebugConfig)
     Debug.scope("LMS", method, new Callable[A] {
         def call: A = {
@@ -193,17 +208,15 @@ trait GraalCompile { self: GEN_Graal_LMS =>
 
   def printInvoke(invoke: InvokeNode): Unit = {
     if (invoke.callTarget.isInstanceOf[MethodCallTargetNode]) {
-      val methodCallTarget = invoke.methodCallTarget()
-      val targetMethod = methodCallTarget.targetMethod() // ResolvedJavaMethod
+      val methodCallTarget = invoke.callTarget()
 
       println("  invoke: " + invoke)
-      println("    trgt: " + targetMethod)
       println("    args: " + methodCallTarget.arguments())
 
       val assumptions = new Assumptions(true)
 
-      val info = InliningUtil.getInlineInfo(methodCallTarget.invoke(), assumptions, OptimisticOptimizations.ALL)
-      println("    info: " + info)
+      // val info = InliningUtil.getInlineInfo(methodCallTarget.invoke(), assumptions, OptimisticOptimizations.ALL)
+      // println("    info: " + info)
     } else {
       println("Invoke Node: " + invoke)
     }
@@ -219,8 +232,8 @@ trait GraalGenBase extends BlockTraversal {
   val IR: Expressions
   import IR._
 
-  val runtime = HotSpotGraalRuntime.getInstance().getRuntime();
-  val config = new GraphBuilderConfiguration(GraphBuilderConfiguration.ResolvePolicy.Eager, null) // resolve eagerly, lots of DeoptNodes otherwise
+  val runtime = HotSpotGraalRuntime.graalRuntime().getRuntime();
+  val config = GraphBuilderConfiguration.getEagerDefault()
 
   // graal stuff imported
   val graphBuilder: LancetGraphBuilder = new LancetGraphBuilder(runtime, config, OptimisticOptimizations.ALL)
