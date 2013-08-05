@@ -135,9 +135,10 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       println("Method " + method)
 
       Debug.dump(graph, "Constructed")
-      new DeadCodeEliminationPhase().apply(graph)
-      Debug.dump(graph, "Constructed DCE")
+      // new DeadCodeEliminationPhase().apply(graph)
+      // Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
+      printGraph("Before compilation:")
       var res = GraalCompiler.compileGraph(
         graph,
         CodeUtil.getCallingConvention(runtime, CallingConvention.Type.JavaCallee, method, false),
@@ -184,7 +185,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        Meter.getValue(),
        Time.getValue(),
        Dump.getValue(),
-       "Impl$$anon$10$$anonfun$1.apply$mcII$sp",// MethodFilter.getValue()
+       "Impl$$anon$5$$anonfun$1.apply$mcII$sp",// MethodFilter.getValue()
        _root_.java.lang.System.out,
        List(new GraphPrinterDumpHandler())
       )
@@ -449,14 +450,11 @@ trait GraalBuilder { self: GraalGenBase =>
   }
 
   def invoke(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
-    Predef.println("Ivoke:" + frameState)
     val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
     val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
     val graalArgs = frameState.popArguments(resolvedMethod.getSignature().getParameterSlots(true),
      resolvedMethod.getSignature().getParameterCount(true))
-    Predef.println("Before invoke:" + frameState)
     genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
-    Predef.println("After invoke:" + frameState)
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
 
     // block stuff
@@ -470,7 +468,6 @@ trait GraalBuilder { self: GraalGenBase =>
     frameState.cleanupDeletedPhis();
     frameState.setRethrowException(false);
     lastInstr = nextFirstInstruction
-    Predef.println("Next Block:" + frameState)
   }
 
   def pushToString(s: Exp[_]) = {

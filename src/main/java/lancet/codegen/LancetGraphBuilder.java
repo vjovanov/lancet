@@ -644,8 +644,6 @@ public class LancetGraphBuilder {
             throw new RuntimeException("Not done yet");
             // return;
         }
-        System.out.println(x);
-        System.out.println(y);
         double probability = 0.5;
 
         // the mirroring and negation operations get the condition into canonical form
@@ -678,7 +676,7 @@ public class LancetGraphBuilder {
           LoopBeginNode loopBegin = (LoopBeginNode) loop._1;
           LoopExitNode loopExit = currentGraph.add(new LoopExitNode(loopBegin));
           newState.insertLoopProxies(loopExit, loop._2);
-          loopExit.setStateAfter(newState.create(20));
+          loopExit.setStateAfter(newState.create(1));
           loopExit.setNext(exitBlockInstr);
           thn = exitBlockInstr;
           thnState = newState;
@@ -690,16 +688,16 @@ public class LancetGraphBuilder {
         }
 
         // Inline the loop target
-        AbstractBeginNode trueSuccessor = BeginNode.begin(target);
+        AbstractBeginNode trueSuccessor = AbstractBeginNode.begin(target);
 
         FixedWithNextNode els = currentGraph.add(new BlockPlaceholderNode());
         FixedNode target1 = new Target(els, frameState).fixed;
         FrameStateBuilder elsState = frameState.copy();
 
-        AbstractBeginNode falseSuccessor = BeginNode.begin(target1);
+        AbstractBeginNode falseSuccessor = AbstractBeginNode.begin(target1);
 
         IfNode ifNode = negate ? new IfNode(condition, falseSuccessor, trueSuccessor, 0.5) : new IfNode(condition, trueSuccessor, falseSuccessor, 0.5);
-        append(currentGraph.add(ifNode));
+        append(ifNode);
         return new scala.Tuple2<scala.Tuple2<FixedWithNextNode,FrameStateBuilder>,
                                 scala.Tuple2<FixedWithNextNode,FrameStateBuilder>>(
                  new scala.Tuple2<FixedWithNextNode,FrameStateBuilder>(thn, thnState),

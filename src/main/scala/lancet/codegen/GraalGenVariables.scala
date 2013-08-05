@@ -26,11 +26,7 @@ trait GraalGenVariables extends GraalNestedCodegen with GraalBuilder {
     case Assign(Variable(a), b) =>
       insert(sym, a.asInstanceOf[Sym[_]]) // alias stack position
       push(b)
-      Predef.println(b)
-      Predef.println(a)
-      Predef.println(frameState)
       storeLocal(kind(a), lookup(a.asInstanceOf[Sym[Any]]))
-      Predef.println(lookup(sym))
     case _ => super.emitNode(sym, rhs)
   }
 }

@@ -18,23 +18,23 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
 
     //Double
     case DoublePlus(lhs,rhs)   =>
-      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatAddNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))))
     case DoubleMinus(lhs,rhs)  =>
-      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatSubNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))))
     case DoubleTimes(lhs,rhs)  =>
-      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatMulNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))))
     case DoubleDivide(lhs,rhs) =>
-      operation(sym)(x => append(graph.unique(new FloatDivNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatDivNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))))
 
     // Floating Point
     case FloatPlus(lhs,rhs)    =>
-      operation(sym)(x => append(graph.unique(new FloatAddNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatAddNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))))
     case FloatMinus(lhs,rhs)   =>
-      operation(sym)(x => append(graph.unique(new FloatSubNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatSubNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))))
     case FloatTimes(lhs,rhs)   =>
-      operation(sym)(x => append(graph.unique(new FloatMulNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatMulNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))))
     case FloatDivide(lhs,rhs)  =>
-      operation(sym)(x => append(graph.unique(new FloatDivNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers())))))
+      operation(sym)(x => append(new FloatDivNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))))
 
     // Intenger
     case IntPlus(lhs,rhs)      =>
@@ -44,9 +44,9 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
     case IntTimes(lhs,rhs)     =>
       operation(sym)(x => graph.unique(new IntegerMulNode(Kind.Int, x(0), x(1))))
     case IntDivide(lhs,rhs)    =>
-      operation(sym)(x => graph.add(append(new IntegerDivNode(Kind.Int, x(0), x(1)))))
+      operation(sym)(x => append(new IntegerDivNode(Kind.Int, x(0), x(1))))
     case IntMod(lhs,rhs)       =>
-      operation(sym)(x => graph.add(append(new IntegerRemNode(Kind.Int, x(0), x(1)))))
+      operation(sym)(x => append(new IntegerRemNode(Kind.Int, x(0), x(1))))
 
     // Conversions
     case IntToLong(lhs) =>

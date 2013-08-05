@@ -155,15 +155,31 @@ class TestGraalGenBasic extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-basic"
 
-  def testInc = withOutFile(prefix+"-inc") {
+  def testRet = withOutFile(prefix+"-ret") {
     trait Prog extends DSL {
-      def main(v: Rep[Int]): Rep[Int] = v + 38 + v * 4 - v
+      def main(v: Rep[Int]): Rep[Int] = v
     }
     val f = (new Prog with Impl).function
-    println(f(1))
-    println(f(2))
-    assert(f(1) == 42)
-    assert(f(2) == 46)
+    assert(f(1) == 1)
+    assert(f(2) == 2)
+  }
+
+  def testInc = withOutFile(prefix+"-inc") {
+    trait Prog extends DSL {
+      def main(v: Rep[Int]): Rep[Int] = v + 1
+    }
+    val f = (new Prog with Impl).function
+    assert(f(1) == 2)
+    assert(f(2) == 3)
+  }
+
+  def testArith = withOutFile(prefix+"-arith") {
+    trait Prog extends DSL {
+      def main(v: Rep[Int]): Rep[Int] = v + 1 + v * 2
+    }
+    val f = (new Prog with Impl).function
+    assert(f(1) == 4)
+    assert(f(2) == 7)
   }
 
   def testIf = withOutFile(prefix+"-if") {
