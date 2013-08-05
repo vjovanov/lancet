@@ -56,7 +56,7 @@ import collection.JavaConversions._
 import com.oracle.graal.debug.internal._
 import com.oracle.graal.printer._
 import com.oracle.graal.api.meta._
-
+import com.oracle.graal.nodes.calc._
 
 trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGraph { self: GraalBuilder =>
   val IR: Expressions with Effects
@@ -482,6 +482,12 @@ trait GraalBuilder { self: GraalGenBase =>
     }
   }
 
+  def convert(sym: Sym[_], lhs: Exp[_], op: ConvertNode.Op) = {
+    insert(sym)
+    push(lhs)
+    genConvert(op)
+    storeLocal(kind(sym), lookup(sym))
+  }
 }
 
 trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal with GraalBuilder {

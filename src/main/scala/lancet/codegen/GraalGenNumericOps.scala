@@ -15,32 +15,24 @@ trait GraalGenNumbericOps extends GraalGenBase with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = rhs match {
-    // Intenger
     case NumericPlus(lhs,rhs)      =>
       operation(sym){x =>
         val node = tpString(sym) match {
-          case "Int" =>
-            new IntegerAddNode(Kind.Int, x(0), x(1))
-          case "Long" =>
-            new IntegerAddNode(Kind.Long, x(0), x(1))
-          case "Double" =>
-            new FloatAddNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))
-          case "Float" =>
-            new FloatAddNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
+          case "Int" | "Long" =>
+            new IntegerAddNode(kind(sym), x(0), x(1))
+          case "Double" | "Float" =>
+            new FloatAddNode(kind(sym), x(0), x(1), isStrict(method.getModifiers()))
         }
         graph.unique(node)
       }
+
     case NumericTimes(lhs,rhs)      =>
       operation(sym){x =>
         val node = tpString(sym) match {
-          case "Int" =>
-            new IntegerMulNode(Kind.Int, x(0), x(1))
-          case "Long" =>
-            new IntegerMulNode(Kind.Long, x(0), x(1))
-          case "Double" =>
-            new FloatMulNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))
-          case "Float" =>
-            new FloatMulNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
+          case "Int" | "Long" =>
+            new IntegerMulNode(kind(sym), x(0), x(1))
+          case "Double" | "Float" =>
+            new FloatMulNode(kind(sym), x(0), x(1), isStrict(method.getModifiers()))
         }
         graph.unique(node)
       }
@@ -48,17 +40,24 @@ trait GraalGenNumbericOps extends GraalGenBase with GraalBuilder {
     case NumericMinus(lhs,rhs)      =>
       operation(sym){x =>
         val node = tpString(sym) match {
-          case "Int" =>
-            new IntegerSubNode(Kind.Int, x(0), x(1))
-          case "Long" =>
-            new IntegerSubNode(Kind.Long, x(0), x(1))
-          case "Double" =>
-            new FloatSubNode(Kind.Double, x(0), x(1), isStrict(method.getModifiers()))
-          case "Float" =>
-            new FloatSubNode(Kind.Float, x(0), x(1), isStrict(method.getModifiers()))
+          case "Int" | "Long" =>
+            new IntegerSubNode(kind(sym), x(0), x(1))
+          case "Double" | "Float" =>
+            new FloatSubNode(kind(sym), x(0), x(1), isStrict(method.getModifiers()))
         }
         graph.unique(node)
       }
+
+    case NumericDivide(lhs,rhs)      =>
+      operation(sym){x =>
+        tpString(sym) match {
+          case "Int" | "Long" =>
+            graph.add(append(new IntegerDivNode(kind(sym), x(0), x(1))))
+          case "Double" | "Float" =>
+            graph.unique(new FloatDivNode(kind(sym), x(0), x(1), isStrict(method.getModifiers())))
+        }
+      }
+
 
     case _ => super.emitNode(sym, rhs)
   }

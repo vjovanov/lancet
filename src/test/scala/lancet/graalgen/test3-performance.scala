@@ -39,7 +39,7 @@ trait KMeansImpl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveEx
   val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse
     with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps
     with GraalGenEqual with GraalGenStringOps with GraalGenIOOps with GraalGenMiscOps
-    with GraalGenNumbericOps with GraalGenMathOps { val IR: self.type = self
+    with GraalGenNumbericOps with GraalGenMathOps with GraalGenImplicitOps { val IR: self.type = self
 
     val f = {(a: Array[Double], b: Int, c: Array[Double], d: Int) => // TODO this is needed for now to trick the FrameStateBuilder.
       val tmp0      =      b
@@ -219,7 +219,7 @@ trait ComputCentroids extends DSL {
        if(points == 0) points = points + 1 else ()
        j = 0
        while(j < mu_col) {
-         mu(i * mu_col + j) = weightedPoints(j) / points.toFloat.toDouble;
+         mu(i * mu_col + j) = weightedPoints(j) / points;
          j = j + 1
        }
 
