@@ -42,6 +42,18 @@ class TestInterpreter3LMS extends BaseTestInterpreter3 {
   }
 }
 
+class TestInterpreter3LMSD extends BaseTestInterpreter3 {
+  val prefix = "test-out/test-interpreter-3-LMSD-"
+  def newCompiler = new BytecodeInterpreter_LMS_Opt with Compiler {
+    initialize()
+    override def defaultHandler = execMethodPostDom
+    debugBlockKeys = false
+    def compile[A:Manifest,B:Manifest](f: A => B): A=>B = compile0(f)
+  }
+}
+
+
+
 trait Compiler {
   def compile[A:Manifest,B:Manifest](f: A => B): A=>B
 }
