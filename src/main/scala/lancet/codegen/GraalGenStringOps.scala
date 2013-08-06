@@ -7,6 +7,7 @@ import com.oracle.graal.api.meta._
 import com.oracle.graal.nodes._
 import com.oracle.graal.nodes.calc._
 
+
 trait GraalGenStringOps extends GraalNestedCodegen with GraalBuilder {
   val IR: StringOpsExp
   import IR._
@@ -14,22 +15,21 @@ trait GraalGenStringOps extends GraalNestedCodegen with GraalBuilder {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) =  {
       rhs match {
-        case StringPlus(s1,s2)       =>
-          insert(sym)
+        case StringPlus(s1,s2)       => ssa(sym) {
           tpString(s2) match {
             case "java.lang.String" =>
               push(s1, s2)
               invoke(classOf[String], "concat", classOf[String])
-              storeLocal(kind(sym), lookup(sym))
-            case "Int" =>
+            case _ =>
               push(s1)
-              // push(Const(Conversions), s2)
-              // invoke(lancet.codegen.Conversions.getClass, "i2s", classOf[Int])
-              push(Const("conversion"))
+              pushToString(s2)
               invoke(classOf[String], "concat", classOf[String])
-              storeLocal(kind(sym), lookup(sym))
           }
-        case StringStartsWith(s1,s2) => ???
+        }
+        case StringStartsWith(s1,s2) => ssa(sym) {
+          push(s1, s2)
+          invoke(classOf[String], "startsWith", classOf[String])
+        }
         case StringTrim(s)           => ???
         case StringSplit(s, sep)     => ???
         case StringEndsWith(s, e)    => ???

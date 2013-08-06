@@ -8,10 +8,6 @@ import com.oracle.graal.api.meta._
 import com.oracle.graal.nodes._
 import com.oracle.graal.nodes.calc._
 
-object Math {
-  final def abs(d: Double): Double = _root_.java.lang.Math.abs(d)
-}
-
 trait GraalGenMathOps extends GraalNestedCodegen with GraalBuilder {
   val IR: MathOpsExp
   import IR._
@@ -35,12 +31,11 @@ trait GraalGenMathOps extends GraalNestedCodegen with GraalBuilder {
     case MathAtan(x)    => ??? // emitValDef(sym, "java.lang.Math.atan(" + quote(x) + ")")
     case MathAtan2(x,y) => ??? // emitValDef(sym, "java.lang.Math.atan2(" + quote(x) + ", " + quote(y) + ")")
     case MathPow(x,y)   => ??? // emitValDef(sym, "java.lang.Math.pow(" + quote(x) + "," + quote(y) + ")")
-    case MathAbs(x)     =>
-      insert(sym)
+    case MathAbs(x)     => ssa(sym) {
       push(Const(lancet.codegen.Math))
       push(x)
       invoke(lancet.codegen.Math.getClass, "abs", x.tp.runtimeClass)
-      storeLocal(kind(sym), lookup(sym))
+    }
     case MathMax(x,y)   => ??? // emitValDef(sym, "java.lang.Math.max(" + quote(x) + ", " + quote(y) + ")")
     case MathMin(x,y)   => ??? // emitValDef(sym, "java.lang.Math.min(" + quote(x) + ", " + quote(y) + ")")
     case MathPi()       => ??? // emitValDef(sym, "java.lang.Math.PI")

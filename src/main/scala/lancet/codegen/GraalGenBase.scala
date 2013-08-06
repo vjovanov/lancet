@@ -34,12 +34,12 @@ import java.util.concurrent.Callable
 import java.util.BitSet
 import java.lang.reflect.Method
 
+import com.oracle.graal.java._
 import com.oracle.graal.phases._   // PhasePlan
 import com.oracle.graal.phases.common._
 import com.oracle.graal.phases.tiers._
 import com.oracle.graal.phases.PhasePlan.PhasePosition
 import com.oracle.graal.hotspot._
-import com.oracle.graal.java._
 import com.oracle.graal.nodes._
 import com.oracle.graal.{java=>J,_}
 import com.oracle.graal.debug._         // Debug
@@ -48,7 +48,6 @@ import com.oracle.graal.api.code._      // Assumptions
 import com.oracle.graal.hotspot._
 import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
 import com.oracle.graal.compiler._      // GraalCompiler
-import com.oracle.graal.java._          // GraphBuilderConfiguration
 import com.oracle.graal.graph._
 import com.oracle.graal.nodes.{java=>J,_}   // StructuredGraph
 import com.oracle.graal.nodes.java._        // MethodCallTargetNode
@@ -186,7 +185,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        Time.getValue(),
        Dump.getValue(),
        "Impl$$anon$5$$anonfun$1.apply$mcII$sp",// MethodFilter.getValue()
-       _root_.java.lang.System.out,
+       System.out,
        List(new GraphPrinterDumpHandler())
       )
     Debug.setConfig(hotspotDebugConfig)
@@ -489,6 +488,9 @@ trait GraalBuilder { self: GraalGenBase =>
       case "Boolean" =>
         push(Const(Conversions), s)
         invoke(lancet.codegen.Conversions.getClass, "b2s", classOf[Boolean])
+      case "AnyRef" =>
+        push(s)
+        invoke(s.tp.runtimeClass, "toString")
     }
   }
 
@@ -497,6 +499,13 @@ trait GraalBuilder { self: GraalGenBase =>
     push(lhs)
     genConvert(op)
     storeLocal(kind(sym), lookup(sym))
+  }
+
+  def ssa(sym: Sym[_])(block: =>Unit) = {
+    insert(sym)
+    block
+    // TODO check with Tiark
+    if (tpString(sym) != "Unit") storeLocal(kind(sym), lookup(sym))
   }
 }
 
@@ -519,5 +528,6 @@ trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal with Gra
       push(s)
     case exp => super.push(exp)
   }
-
 }
+
+case class GraalBackendException(m: String) extends Exception(m)

@@ -44,6 +44,8 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
         val l: Rep[Long] = v.toLong
         val f: Rep[Float] = v.toFloat
         val d: Rep[Double] = v.toDouble
+        val x = "a" + "b"
+        println(x)
         println(i)
         println("Int Value = " + i)
         println(l)
@@ -52,6 +54,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
         println("Long Value = " + f)
         println(d)
         println("Double Value = " + d)
+        println("Boolean Value = " + "abcd".startsWith("ab"))
         v
       }
     }
@@ -62,7 +65,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  def testArithmetics = withOutFile(prefix+"-arithmetics") {
+def testArithmetics = withOutFile(prefix+"-arithmetics") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
