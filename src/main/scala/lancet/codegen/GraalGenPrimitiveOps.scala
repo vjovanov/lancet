@@ -38,11 +38,11 @@ trait GraalGenPrimitiveOps extends GraalGenBase with GraalBuilder {
 
     // Intenger
     case IntPlus(lhs,rhs)      =>
-      operation(sym)(x => graph.unique(new IntegerAddNode(Kind.Int, x(0), x(1))))
+      operation(sym)(x => append(new IntegerAddNode(Kind.Int, x(0), x(1))))
     case IntMinus(lhs,rhs)     =>
-      operation(sym)(x => graph.unique(new IntegerSubNode(Kind.Int, x(0), x(1))))
+      operation(sym)(x => append(new IntegerSubNode(Kind.Int, x(0), x(1))))
     case IntTimes(lhs,rhs)     =>
-      operation(sym)(x => graph.unique(new IntegerMulNode(Kind.Int, x(0), x(1))))
+      operation(sym)(x => append(new IntegerMulNode(Kind.Int, x(0), x(1))))
     case IntDivide(lhs,rhs)    =>
       operation(sym)(x => graph.add(append(new IntegerDivNode(Kind.Int, x(0), x(1)))))
     case IntMod(lhs,rhs)       =>

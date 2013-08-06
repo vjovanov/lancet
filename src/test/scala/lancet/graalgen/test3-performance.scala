@@ -32,14 +32,16 @@ import com.oracle.graal.hotspot._
 import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
 import scala.virtualization.lms.common._
 import scala.virtualization.lms.util.OverloadHack
-
+import lancet.core._
 // DRY :)
-trait KMeansImpl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp { self =>
+trait KMeansImpl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp
+  with VectArrayOpsExp
+  { self =>
   def params(i: Int, b: Int, c: Int) = ???
   val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse
     with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps
     with GraalGenEqual with GraalGenStringOps with GraalGenIOOps with GraalGenMiscOps
-    with GraalGenNumbericOps with GraalGenMathOps with GraalGenImplicitOps { val IR: self.type = self
+    with GraalGenNumericOps with GraalGenMathOps with GraalGenImplicitOps { val IR: self.type = self
 
     val f = {(a: Array[Double], b: Int, c: Array[Double], d: Int) => // TODO this is needed for now to trick the FrameStateBuilder.
       val tmp0      =      b

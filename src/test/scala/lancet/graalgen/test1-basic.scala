@@ -26,6 +26,7 @@ package graalgen
 import lancet.api._
 import lancet.interpreter._
 import lancet.codegen._
+import lancet.core._
 
 import com.oracle.graal.api.meta._      // ResolvedJavaMethod
 import com.oracle.graal.hotspot._
@@ -33,16 +34,23 @@ import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
 import scala.virtualization.lms.common._
 import scala.virtualization.lms.util.OverloadHack
 
-trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPrimitives with LiftString with LiftVariables {
+trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPrimitives with LiftString with LiftVariables
+  with VectArrayOps
+{
   def main(arg: Rep[Int]): Rep[Int]
 }
 
-trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp { self =>
+trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp
+  with VectArrayOpsExp
+  { self =>
   def params(i: Int, b: Int, c: Int) = ???
+
   val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse
     with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps
     with GraalGenEqual with GraalGenStringOps with GraalGenIOOps with GraalGenMiscOps
-    with GraalGenNumbericOps { val IR: self.type = self
+    with GraalGenNumericOps
+    with GraalGenVectArrayOps
+    { val IR: self.type = self
 
     val f = (x: Int) => { // TODO this is needed for now to trick the FrameStateBuilder.
       val tmp0       = x
@@ -138,7 +146,6 @@ trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with
     val block = reifyBlock{main(input)}
     emit(scala.List(input), block, method)
   }
-
   val function = codegen.compile(codegen.f)
 }
 

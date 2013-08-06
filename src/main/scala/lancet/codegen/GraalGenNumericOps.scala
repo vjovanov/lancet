@@ -9,7 +9,7 @@ import com.oracle.graal.api.meta._
 import com.oracle.graal.nodes._
 import com.oracle.graal.nodes.calc._
 
-trait GraalGenNumbericOps extends GraalGenBase with GraalBuilder {
+trait GraalGenNumericOps extends GraalGenBase with GraalBuilder {
   val IR: NumericOpsExp
   import IR._
   import graphBuilder._
