@@ -63,7 +63,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     }
   }*/
 
-  /*def testArithmetics = withOutFile(prefix+"-arithmetics") {
+  def testArithmetics = withOutFile(prefix+"-arithmetics") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
@@ -175,9 +175,9 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-conditions-out"){
       f(1)
     }
-  }*/
+  }
 
-  /*def testArrays = withOutFile(prefix + "-arrays") {
+  def testArrays = withOutFile(prefix + "-arrays") {
     trait Prog extends DSL {
 
       def main(v: Rep[Int]): Rep[Int] = {
@@ -210,7 +210,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
       assert(f(1) == 1)
       assert(f(30) == 2178309 - 1)
     }
-  }*/
+  }
 
   def testWhileLoops = withOutFile(prefix + "-while") {
     trait Prog extends DSL {

@@ -23,7 +23,7 @@ trait GraalGenNumericOps extends GraalGenBase with GraalBuilder {
           case "Double" | "Float" =>
             new FloatAddNode(kind(sym), x(0), x(1), isStrict(method.getModifiers()))
         }
-        graph.unique(node)
+        append(node)
       }
 
     case NumericTimes(lhs,rhs)      =>
@@ -34,7 +34,7 @@ trait GraalGenNumericOps extends GraalGenBase with GraalBuilder {
           case "Double" | "Float" =>
             new FloatMulNode(kind(sym), x(0), x(1), isStrict(method.getModifiers()))
         }
-        graph.unique(node)
+        append(node)
       }
 
     case NumericMinus(lhs,rhs)      =>
@@ -45,16 +45,16 @@ trait GraalGenNumericOps extends GraalGenBase with GraalBuilder {
           case "Double" | "Float" =>
             new FloatSubNode(kind(sym), x(0), x(1), isStrict(method.getModifiers()))
         }
-        graph.unique(node)
+        append(node)
       }
 
     case NumericDivide(lhs,rhs)      =>
       operation(sym){x =>
         tpString(sym) match {
           case "Int" | "Long" =>
-            graph.add(append(new IntegerDivNode(kind(sym), x(0), x(1))))
+            append(new IntegerDivNode(kind(sym), x(0), x(1)))
           case "Double" | "Float" =>
-            graph.unique(new FloatDivNode(kind(sym), x(0), x(1), isStrict(method.getModifiers())))
+            append(new FloatDivNode(kind(sym), x(0), x(1), isStrict(method.getModifiers())))
         }
       }
 

@@ -22,17 +22,20 @@
  */
 package lancet.codegen;
 
+import static com.oracle.graal.api.code.DeoptimizationAction.*;
+import static com.oracle.graal.api.code.TypeCheckHints.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.bytecode.Bytecodes.*;
+import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 import static java.lang.reflect.Modifier.*;
 
 import java.lang.reflect.*;
 import java.util.*;
-import com.oracle.graal.java.*;
+
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
-import com.oracle.graal.api.meta.ProfilingInfo.ExceptionSeen;
+import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
@@ -48,6 +51,7 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.java.*;
 
 /**
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
@@ -56,8 +60,8 @@ public class LancetGraphBuilder {
 
     public static final class RuntimeCalls {
 
-        public static final Descriptor CREATE_NULL_POINTER_EXCEPTION = new Descriptor("createNullPointerException", true, Object.class);
-        public static final Descriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new Descriptor("createOutOfBoundsException", true, Object.class, int.class);
+        public static final ForeignCallDescriptor CREATE_NULL_POINTER_EXCEPTION = new ForeignCallDescriptor("createNullPointerException", Object.class);
+        public static final ForeignCallDescriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new ForeignCallDescriptor("createOutOfBoundsException", Object.class, int.class);
     }
 
     /**
@@ -72,27 +76,31 @@ public class LancetGraphBuilder {
      */
     public static final int TRACELEVEL_STATE = 2;
 
-    protected StructuredGraph currentGraph;
+    public LineNumberTable lnt;
+    public int previousLineNumber;
+    public int currentLineNumber;
 
-    private final MetaAccessProvider runtime;
-    private ConstantPool constantPool;
+    public StructuredGraph currentGraph;
+
+    public final MetaAccessProvider runtime;
+    public ConstantPool constantPool;
     public ResolvedJavaMethod method;
-    private int entryBCI;
-    private ProfilingInfo profilingInfo;
+    public int entryBCI;
+    public ProfilingInfo profilingInfo;
 
-    private BytecodeStream stream;           // the bytecode stream
+    public BytecodeStream stream;           // the bytecode stream
 
-    protected FrameStateBuilder frameState;          // the current execution state
-    private Block currentBlock;
+    public FrameStateBuilder frameState;          // the current execution state
+    public Block currentBlock;
 
-    private ValueNode methodSynchronizedObject;
-    private ExceptionDispatchBlock unwindBlock;
-    private Block returnBlock;
+    public ValueNode methodSynchronizedObject;
+    public ExceptionDispatchBlock unwindBlock;
+    public Block returnBlock;
 
-    protected FixedWithNextNode lastInstr;                 // the last instruction added
+    public FixedWithNextNode lastInstr;                 // the last instruction added
 
-    private final GraphBuilderConfiguration graphBuilderConfig;
-    private final OptimisticOptimizations optimisticOpts;
+    public final GraphBuilderConfiguration graphBuilderConfig;
+    public final OptimisticOptimizations optimisticOpts;
 
     /**
      * Meters the number of actual bytecodes parsed.
@@ -112,43 +120,46 @@ public class LancetGraphBuilder {
         }
     }
 
-    private Block[] loopHeaders;
+    public Block[] loopHeaders;
+
+    /**
+     * Gets the current frame state being processed by this builder.
+     */
+    public FrameStateBuilder getCurrentFrameState() {
+        return frameState;
+    }
+
+    /**
+     * Gets the graph being processed by this builder.
+     */
+    public StructuredGraph getGraph() {
+        return currentGraph;
+    }
 
     public LancetGraphBuilder(MetaAccessProvider runtime, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
-        this.graphBuilderConfig = graphBuilderConfig;
-        this.optimisticOpts = optimisticOpts;
-        this.runtime = runtime;
-        assert runtime != null;
-    }
-
-    public void init(StructuredGraph graph) {
-        method = graph.method();
-        entryBCI = graph.getEntryBCI();
-        profilingInfo = method.getProfilingInfo();
-        assert method.getCode() != null : "method must contain bytecodes: " + method;
-        this.stream = new BytecodeStream(method.getCode());
-        this.constantPool = method.getConstantPool();
-        unwindBlock = null;
-        returnBlock = null;
-        methodSynchronizedObject = null;
-        this.currentGraph = graph;
-        this.frameState = new FrameStateBuilder(method, graph, graphBuilderConfig.eagerResolving());
-        TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
-        if (GraalOptions.PrintProfilingInformation) {
+         this.graphBuilderConfig = graphBuilderConfig;
+         this.optimisticOpts = optimisticOpts;
+         this.runtime = runtime;
+         assert runtime != null;
+     }
+     public void init(StructuredGraph graph) {
+         method = graph.method();
+         entryBCI = graph.getEntryBCI();
+         profilingInfo = method.getProfilingInfo();
+         assert method.getCode() != null : "method must contain bytecodes: " + method;
+         this.stream = new BytecodeStream(method.getCode());
+         this.constantPool = method.getConstantPool();
+         unwindBlock = null;
+         returnBlock = null;
+         methodSynchronizedObject = null;
+         this.currentGraph = graph;
+         this.frameState = new FrameStateBuilder(method, graph, graphBuilderConfig.eagerResolving());
+         TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
+         if (PrintProfilingInformation.getValue()) {
             TTY.println("Profiling info for " + method);
             TTY.println(MetaUtil.indent(MetaUtil.profileToString(profilingInfo, method, CodeUtil.NEW_LINE), "  "));
-        }
-    }
-
-    private BciBlockMapping createBlockMap() {
-        BciBlockMapping map = new BciBlockMapping(method);
-        map.build();
-        if (Debug.isDumpEnabled()) {
-            Debug.dump(map, MetaUtil.format("After block building %f %R %H.%n(%P)", method));
-        }
-
-        return map;
-    }
+         }
+     }
 
     public void finalize() {
         Debug.dump(currentGraph, "After Lancet IR generation");
@@ -168,7 +179,26 @@ public class LancetGraphBuilder {
         }
     }
 
-    private Block unwindBlock(int bci) {
+
+    public BciBlockMapping createBlockMap() {
+        BciBlockMapping map = new BciBlockMapping(method);
+        map.build();
+        if (Debug.isDumpEnabled()) {
+            Debug.dump(map, MetaUtil.format("After block building %f %R %H.%n(%P)", method));
+        }
+
+        return map;
+    }
+
+// TODO
+        //if (graphBuilderConfig.eagerInfopointMode()) {
+        //    ((StateSplit) lastInstr).setStateAfter(frameState.create(0));
+        //    InfopointNode ipn = currentGraph.add(new InfopointNode(InfopointReason.METHOD_START));
+        //    lastInstr.setNext(ipn);
+        //    lastInstr = ipn;
+        //}
+
+    public Block unwindBlock(int bci) {
         if (unwindBlock == null) {
             unwindBlock = new ExceptionDispatchBlock();
             unwindBlock.startBci = -1;
@@ -179,7 +209,7 @@ public class LancetGraphBuilder {
         return unwindBlock;
     }
 
-    private Block returnBlock(int bci) {
+    public Block returnBlock(int bci) {
         if (returnBlock == null) {
             returnBlock = new Block();
             returnBlock.startBci = bci;
@@ -197,14 +227,20 @@ public class LancetGraphBuilder {
         return stream.currentBCI();
     }
 
-    protected void loadLocal(int index, Kind kind) {
+    public void loadLocal(int index, Kind kind) {
         frameState.push(kind, frameState.loadLocal(index));
     }
 
-    protected void storeLocal(Kind kind, int index) {
-        System.out.println("Kind: " + kind);
-        System.out.println("Store: " + frameState);
-        frameState.storeLocal(index, frameState.pop(kind));
+    public void storeLocal(Kind kind, int index) {
+        ValueNode value;
+        if (kind == Kind.Object) {
+            value = frameState.xpop();
+            // astore and astore_<n> may be used to store a returnAddress (jsr)
+            assert value.kind() == Kind.Object || value.kind() == Kind.Int;
+        } else {
+            value = frameState.pop(kind);
+        }
+        frameState.storeLocal(index, value);
     }
 
     public static boolean covers(ExceptionHandler handler, int bci) {
@@ -215,7 +251,99 @@ public class LancetGraphBuilder {
         return handler.catchTypeCPI() == 0;
     }
 
-    private DispatchBeginNode handleException(ValueNode exceptionObject, int bci) {
+    /**
+     * @param type the unresolved type of the constant
+     */
+    public void handleUnresolvedLoadConstant(JavaType type) {
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+        frameState.push(Kind.Object, appendConstant(Constant.NULL_OBJECT));
+    }
+
+    /**
+     * @param type the unresolved type of the type check
+     * @param object the object value whose type is being checked against {@code type}
+     */
+    public void handleUnresolvedCheckCast(JavaType type, ValueNode object) {
+        append(new FixedGuardNode(currentGraph.unique(new IsNullNode(object)), Unresolved, InvalidateRecompile));
+        frameState.apush(appendConstant(Constant.NULL_OBJECT));
+    }
+
+    /**
+     * @param type the unresolved type of the type check
+     * @param object the object value whose type is being checked against {@code type}
+     */
+    public void handleUnresolvedInstanceOf(JavaType type, ValueNode object) {
+        BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
+        DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+        append(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 1));
+        lastInstr = successor;
+        frameState.ipush(appendConstant(Constant.INT_0));
+    }
+
+    /**
+     * @param type the type being instantiated
+     */
+    public void handleUnresolvedNewInstance(JavaType type) {
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+        frameState.apush(appendConstant(Constant.NULL_OBJECT));
+    }
+
+    /**
+     * @param type the type of the array being instantiated
+     * @param length the length of the array
+     */
+    public void handleUnresolvedNewObjectArray(JavaType type, ValueNode length) {
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+        frameState.apush(appendConstant(Constant.NULL_OBJECT));
+    }
+
+    /**
+     * @param type the type being instantiated
+     * @param dims the dimensions for the multi-array
+     */
+    public void handleUnresolvedNewMultiArray(JavaType type, ValueNode[] dims) {
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+        frameState.apush(appendConstant(Constant.NULL_OBJECT));
+    }
+
+    /**
+     * @param field the unresolved field
+     * @param receiver the object containing the field or {@code null} if {@code field} is static
+     */
+    public void handleUnresolvedLoadField(JavaField field, ValueNode receiver) {
+        Kind kind = field.getKind();
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+        frameState.push(kind.getStackKind(), appendConstant(Constant.defaultForKind(kind)));
+    }
+
+    /**
+     * @param field the unresolved field
+     * @param value the value being stored to the field
+     * @param receiver the object containing the field or {@code null} if {@code field} is static
+     */
+    public void handleUnresolvedStoreField(JavaField field, ValueNode value, ValueNode receiver) {
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+    }
+
+    /**
+     * @param representation
+     * @param type
+     */
+    public void handleUnresolvedExceptionType(Representation representation, JavaType type) {
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+    }
+
+    public void handleUnresolvedInvoke(JavaMethod javaMethod, InvokeKind invokeKind) {
+        boolean withReceiver = invokeKind != InvokeKind.Static;
+        append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
+        frameState.popArguments(javaMethod.getSignature().getParameterSlots(withReceiver), javaMethod.getSignature().getParameterCount(withReceiver));
+        Kind kind = javaMethod.getSignature().getReturnKind();
+        if (kind != Kind.Void) {
+            frameState.push(kind.getStackKind(), appendConstant(Constant.defaultForKind(kind)));
+        }
+    }
+
+    public DispatchBeginNode handleException(ValueNode exceptionObject, int bci) {
         assert bci == FrameState.BEFORE_BCI || bci == bci() : "invalid bci";
         Debug.log("Creating exception dispatch edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, profilingInfo.getExceptionSeen(bci));
 
@@ -230,39 +358,33 @@ public class LancetGraphBuilder {
         FrameStateBuilder dispatchState = frameState.copy();
         dispatchState.clearStack();
 
-        DispatchBeginNode dispatchBegin = currentGraph.add(new DispatchBeginNode());
-        dispatchBegin.setStateAfter(dispatchState.create(bci));
-
+        DispatchBeginNode dispatchBegin;
         if (exceptionObject == null) {
-            ExceptionObjectNode newExceptionObject = currentGraph.add(new ExceptionObjectNode(runtime));
-            dispatchState.apush(newExceptionObject);
+            dispatchBegin = currentGraph.add(new ExceptionObjectNode(runtime));
+            dispatchState.apush(dispatchBegin);
             dispatchState.setRethrowException(true);
-            newExceptionObject.setStateAfter(dispatchState.create(bci));
-
-            FixedNode target = createTarget(dispatchBlock, dispatchState);
-            dispatchBegin.setNext(newExceptionObject);
-            newExceptionObject.setNext(target);
+            dispatchBegin.setStateAfter(dispatchState.create(bci));
         } else {
+            dispatchBegin = currentGraph.add(new DispatchBeginNode());
+            dispatchBegin.setStateAfter(dispatchState.create(bci));
             dispatchState.apush(exceptionObject);
             dispatchState.setRethrowException(true);
-
-            FixedNode target = createTarget(dispatchBlock, dispatchState);
-            dispatchBegin.setNext(target);
         }
+        FixedNode target = createTarget(dispatchBlock, dispatchState);
+        dispatchBegin.setNext(target);
         return dispatchBegin;
     }
 
-    private void genLoadConstant(int cpi, int opcode) {
+    public void genLoadConstant(int cpi, int opcode) {
         Object con = lookupConstant(cpi, opcode);
 
         if (con instanceof JavaType) {
             // this is a load of class constant which might be unresolved
             JavaType type = (JavaType) con;
             if (type instanceof ResolvedJavaType) {
-                frameState.push(Kind.Object, append(ConstantNode.forConstant(((ResolvedJavaType) type).getEncoding(Representation.JavaClass), runtime, currentGraph)));
+                frameState.push(Kind.Object, appendConstant(((ResolvedJavaType) type).getEncoding(Representation.JavaClass)));
             } else {
-                append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
-                frameState.push(Kind.Object, append(ConstantNode.forObject(null, runtime, currentGraph)));
+                handleUnresolvedLoadConstant(type);
             }
         } else if (con instanceof Constant) {
             Constant constant = (Constant) con;
@@ -277,8 +399,7 @@ public class LancetGraphBuilder {
 
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
-        ValueNode v = append(currentGraph.add(new LoadIndexedNode(array, index, kind)));
-        frameState.push(kind.getStackKind(), v);
+        frameState.push(kind.getStackKind(), append(new LoadIndexedNode(array, index, kind)));
     }
 
     public void genStoreIndexed(Kind kind) {
@@ -287,11 +408,10 @@ public class LancetGraphBuilder {
         ValueNode value = frameState.pop(kind.getStackKind());
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
-        StoreIndexedNode result = currentGraph.add(new StoreIndexedNode(array, index, kind, value));
-        append(result);
+        append(new StoreIndexedNode(array, index, kind, value));
     }
 
-    private void stackOp(int opcode) {
+    public void stackOp(int opcode) {
         switch (opcode) {
             case POP: {
                 frameState.xpop();
@@ -372,7 +492,7 @@ public class LancetGraphBuilder {
 
     }
 
-    private void genArithmeticOp(Kind result, int opcode) {
+    public void genArithmeticOp(Kind result, int opcode) {
         ValueNode y = frameState.pop(result);
         ValueNode x = frameState.pop(result);
         boolean isStrictFP = isStrict(method.getModifiers());
@@ -413,11 +533,10 @@ public class LancetGraphBuilder {
             default:
                 throw new GraalInternalError("should not reach");
         }
-        ValueNode result1 = append(currentGraph.unique(v));
-        frameState.push(result, result1);
+        frameState.push(result, append(v));
     }
 
-    private void genIntegerDivOp(Kind result, int opcode) {
+    public void genIntegerDivOp(Kind result, int opcode) {
         ValueNode y = frameState.pop(result);
         ValueNode x = frameState.pop(result);
         FixedWithNextNode v;
@@ -433,15 +552,14 @@ public class LancetGraphBuilder {
             default:
                 throw new GraalInternalError("should not reach");
         }
-        ValueNode result1 = append(currentGraph.add(v));
-        frameState.push(result, result1);
+        frameState.push(result, append(v));
     }
 
-    private void genNegateOp(Kind kind) {
-        frameState.push(kind, append(currentGraph.unique(new NegateNode(frameState.pop(kind)))));
+    public void genNegateOp(Kind kind) {
+        frameState.push(kind, append(new NegateNode(frameState.pop(kind))));
     }
 
-    private void genShiftOp(Kind kind, int opcode) {
+    public void genShiftOp(Kind kind, int opcode) {
         ValueNode s = frameState.ipop();
         ValueNode x = frameState.pop(kind);
         ShiftNode v;
@@ -461,10 +579,10 @@ public class LancetGraphBuilder {
             default:
                 throw new GraalInternalError("should not reach");
         }
-        frameState.push(kind, append(currentGraph.unique(v)));
+        frameState.push(kind, append(v));
     }
 
-    private void genLogicOp(Kind kind, int opcode) {
+    public void genLogicOp(Kind kind, int opcode) {
         ValueNode y = frameState.pop(kind);
         ValueNode x = frameState.pop(kind);
         BitLogicNode v;
@@ -484,36 +602,30 @@ public class LancetGraphBuilder {
             default:
                 throw new GraalInternalError("should not reach");
         }
-        frameState.push(kind, append(currentGraph.unique(v)));
+        frameState.push(kind, append(v));
     }
 
     public void genCompareOp(Kind kind, boolean isUnorderedLess) {
         ValueNode y = frameState.pop(kind);
         ValueNode x = frameState.pop(kind);
-        // TODO clean
-        System.out.println("Compare: " + x + " " + y + ".");
-        frameState.ipush(append(currentGraph.unique(new NormalizeCompareNode(x, y, isUnorderedLess))));
+        frameState.ipush(append(new NormalizeCompareNode(x, y, isUnorderedLess)));
     }
 
     public void genConvert(ConvertNode.Op opcode) {
         ValueNode input = frameState.pop(opcode.from.getStackKind());
-        frameState.push(opcode.to.getStackKind(), append(currentGraph.unique(new ConvertNode(opcode, input))));
+        frameState.push(opcode.to.getStackKind(), append(new ConvertNode(opcode, input)));
     }
 
-    private void genIncrement() {
+    public void genIncrement() {
         int index = stream().readLocalIndex();
         int delta = stream().readIncrement();
         ValueNode x = frameState.loadLocal(index);
-        ValueNode y = append(ConstantNode.forInt(delta, currentGraph));
-        frameState.storeLocal(index, append(currentGraph.unique(new IntegerAddNode(Kind.Int, x, y))));
+        ValueNode y = appendConstant(Constant.forInt(delta));
+        frameState.storeLocal(index, append(new IntegerAddNode(Kind.Int, x, y)));
     }
 
-    private void genGoto() {
-        double probability = profilingInfo.getBranchTakenProbability(bci());
-        if (probability < 0) {
-            probability = 1;
-        }
-        appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
+    public void genGoto() {
+        appendGoto(createTarget(currentBlock.successors.get(0), frameState));
         assert currentBlock.numNormalSuccessors() == 1;
     }
 
@@ -532,8 +644,6 @@ public class LancetGraphBuilder {
             throw new RuntimeException("Not done yet");
             // return;
         }
-        System.out.println(x);
-        System.out.println(y);
         double probability = 0.5;
 
         // the mirroring and negation operations get the condition into canonical form
@@ -566,7 +676,7 @@ public class LancetGraphBuilder {
           LoopBeginNode loopBegin = (LoopBeginNode) loop._1;
           LoopExitNode loopExit = currentGraph.add(new LoopExitNode(loopBegin));
           newState.insertLoopProxies(loopExit, loop._2);
-          loopExit.setStateAfter(newState.create(20));
+          loopExit.setStateAfter(newState.create(1));
           loopExit.setNext(exitBlockInstr);
           thn = exitBlockInstr;
           thnState = newState;
@@ -578,16 +688,16 @@ public class LancetGraphBuilder {
         }
 
         // Inline the loop target
-        BeginNode trueSuccessor = BeginNode.begin(target);
+        AbstractBeginNode trueSuccessor = AbstractBeginNode.begin(target);
 
         FixedWithNextNode els = currentGraph.add(new BlockPlaceholderNode());
         FixedNode target1 = new Target(els, frameState).fixed;
         FrameStateBuilder elsState = frameState.copy();
 
-        BeginNode falseSuccessor = BeginNode.begin(target1);
+        AbstractBeginNode falseSuccessor = AbstractBeginNode.begin(target1);
 
         IfNode ifNode = negate ? new IfNode(condition, falseSuccessor, trueSuccessor, 0.5) : new IfNode(condition, trueSuccessor, falseSuccessor, 0.5);
-        append(currentGraph.add(ifNode));
+        append(ifNode);
         return new scala.Tuple2<scala.Tuple2<FixedWithNextNode,FrameStateBuilder>,
                                 scala.Tuple2<FixedWithNextNode,FrameStateBuilder>>(
                  new scala.Tuple2<FixedWithNextNode,FrameStateBuilder>(thn, thnState),
@@ -596,7 +706,7 @@ public class LancetGraphBuilder {
     }
 
 
-    private void ifNode(ValueNode x, Condition cond, ValueNode y) {
+    public void ifNode(ValueNode x, Condition cond, ValueNode y) {
         assert !x.isDeleted() && !y.isDeleted();
         assert currentBlock.numNormalSuccessors() == 2;
         Block trueBlock = currentBlock.successors.get(0);
@@ -634,136 +744,113 @@ public class LancetGraphBuilder {
         }
         condition = currentGraph.unique(condition);
 
-        BeginNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
-        BeginNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
+        AbstractBeginNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
+        AbstractBeginNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
 
         IfNode ifNode = negate ? new IfNode(condition, falseSuccessor, trueSuccessor, 1 - probability) : new IfNode(condition, trueSuccessor, falseSuccessor, probability);
-        append(currentGraph.add(ifNode));
+        append(ifNode);
     }
 
-    private void genIfZero(Condition cond) {
+    public void genIfZero(Condition cond) {
         ValueNode y = appendConstant(Constant.INT_0);
         ValueNode x = frameState.ipop();
         ifNode(x, cond, y);
     }
 
-    private void genIfNull(Condition cond) {
+    public void genIfNull(Condition cond) {
         ValueNode y = appendConstant(Constant.NULL_OBJECT);
         ValueNode x = frameState.apop();
         ifNode(x, cond, y);
     }
 
-    protected void genIfSame(Kind kind, Condition cond) {
+    public void genIfSame(Kind kind, Condition cond) {
         ValueNode y = frameState.pop(kind);
         ValueNode x = frameState.pop(kind);
         assert !x.isDeleted() && !y.isDeleted();
         ifNode(x, cond, y);
     }
 
-    private void genThrow() {
+    public void genThrow() {
         ValueNode exception = frameState.apop();
-        FixedGuardNode node = currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile,
-                        true));
-        append(node);
-        append(handleException(exception, bci()));
+        append(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
+        lastInstr.setNext(handleException(exception, bci()));
     }
 
-    private JavaType lookupType(int cpi, int bytecode) {
+    public JavaType lookupType(int cpi, int bytecode) {
         eagerResolvingForSnippets(cpi, bytecode);
         JavaType result = constantPool.lookupType(cpi, bytecode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || result instanceof ResolvedJavaType;
+        assert !graphBuilderConfig.unresolvedIsError() || result instanceof ResolvedJavaType;
         return result;
     }
 
-    protected JavaMethod lookupMethod(int cpi, int opcode) {
+    public JavaMethod lookupMethod(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaMethod result = constantPool.lookupMethod(cpi, opcode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized()) : result;
+        // assert !graphBuilderConfig.unresolvedIsError() || ((result instanceof ResolvedJavaMethod)
+// && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized()) : result;
         return result;
     }
 
-    private JavaField lookupField(int cpi, int opcode) {
+    public JavaField lookupField(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaField result = constantPool.lookupField(cpi, opcode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized()) : result;
+        assert !graphBuilderConfig.unresolvedIsError() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized()) : result;
         return result;
     }
 
-    private Object lookupConstant(int cpi, int opcode) {
+    public Object lookupConstant(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         Object result = constantPool.lookupConstant(cpi);
         assert !graphBuilderConfig.eagerResolving() || !(result instanceof JavaType) || (result instanceof ResolvedJavaType);
         return result;
     }
 
-    // private void eagerResolving(int cpi, int bytecode) {
-    // if (graphBuilderConfig.eagerResolving()) {
-    // constantPool.loadReferencedType(cpi, bytecode);
-    // }
-    // }
-
-    private void eagerResolvingForSnippets(int cpi, int bytecode) {
-        if (graphBuilderConfig.eagerResolvingForSnippets()) {
+    public void eagerResolvingForSnippets(int cpi, int bytecode) {
+        if (graphBuilderConfig.eagerResolving()) {
             constantPool.loadReferencedType(cpi, bytecode);
         }
     }
 
-    private JavaTypeProfile getProfileForTypeCheck(ResolvedJavaType type) {
-        if (!optimisticOpts.useTypeCheckHints() || TypeCheckHints.canHaveSubtype(type)) {
+    public JavaTypeProfile getProfileForTypeCheck(ResolvedJavaType type) {
+        if (!optimisticOpts.useTypeCheckHints() || !canHaveSubtype(type)) {
             return null;
         } else {
-            ResolvedJavaType uniqueSubtype = type.findUniqueConcreteSubtype();
-            if (uniqueSubtype != null) {
-                return new JavaTypeProfile(0.0D, new ProfiledType(uniqueSubtype, 1.0D));
-            } else {
-                return profilingInfo.getTypeProfile(bci());
-            }
+            return profilingInfo.getTypeProfile(bci());
         }
     }
 
-    private void genCheckCast() {
+    public void genCheckCast() {
         int cpi = stream().readCPI();
         JavaType type = lookupType(cpi, CHECKCAST);
-        boolean initialized = type instanceof ResolvedJavaType;
-        if (initialized) {
-            ValueNode object = frameState.apop();
-            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) type, object, getProfileForTypeCheck((ResolvedJavaType) type)));
-            append(checkCast);
-            frameState.apush(checkCast);
+        ValueNode object = frameState.apop();
+        if (type instanceof ResolvedJavaType) {
+            JavaTypeProfile profileForTypeCheck = getProfileForTypeCheck((ResolvedJavaType) type);
+            CheckCastNode checkCastNode = append(new CheckCastNode((ResolvedJavaType) type, object, profileForTypeCheck, false));
+            frameState.apush(checkCastNode);
         } else {
-            ValueNode object = frameState.apop();
-            append(currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(object)), DeoptimizationReason.Unresolved, DeoptimizationAction.InvalidateRecompile)));
-            frameState.apush(appendConstant(Constant.NULL_OBJECT));
+            handleUnresolvedCheckCast(type, object);
         }
     }
 
-    private void genInstanceOf() {
+    public void genInstanceOf() {
         int cpi = stream().readCPI();
         JavaType type = lookupType(cpi, INSTANCEOF);
         ValueNode object = frameState.apop();
         if (type instanceof ResolvedJavaType) {
             ResolvedJavaType resolvedType = (ResolvedJavaType) type;
             InstanceOfNode instanceOfNode = new InstanceOfNode((ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
-            ConditionalNode conditional = currentGraph.unique(new ConditionalNode(currentGraph.unique(instanceOfNode), ConstantNode.forInt(1, currentGraph), ConstantNode.forInt(0, currentGraph)));
-            frameState.ipush(append(conditional));
+            frameState.ipush(append(new ConditionalNode(currentGraph.unique(instanceOfNode), ConstantNode.forInt(1, currentGraph), ConstantNode.forInt(0, currentGraph))));
         } else {
-            BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
-            DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved));
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 1));
-            append(ifNode);
-            lastInstr = successor;
-            frameState.ipush(appendConstant(Constant.INT_0));
+            handleUnresolvedInstanceOf(type, object);
         }
     }
 
     void genNewInstance(int cpi) {
         JavaType type = lookupType(cpi, NEW);
         if (type instanceof ResolvedJavaType && ((ResolvedJavaType) type).isInitialized()) {
-            NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type, true, false));
-            frameState.apush(append(n));
+            frameState.apush(append(new NewInstanceNode((ResolvedJavaType) type, true)));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
-            frameState.apush(appendConstant(Constant.NULL_OBJECT));
+            handleUnresolvedNewInstance(type);
         }
     }
 
@@ -802,24 +889,21 @@ public class LancetGraphBuilder {
     public void genNewPrimitiveArray(int typeCode) {
         Class<?> clazz = arrayTypeCodeToClass(typeCode);
         ResolvedJavaType elementType = runtime.lookupJavaType(clazz);
-        NewArrayNode nta = currentGraph.add(new NewArrayNode(elementType, frameState.ipop(), true, false));
-        frameState.apush(append(nta));
+        frameState.apush(append(new NewArrayNode(elementType, frameState.ipop(), true)));
     }
 
-    private void genNewObjectArray(int cpi) {
+    public void genNewObjectArray(int cpi) {
         JavaType type = lookupType(cpi, ANEWARRAY);
         ValueNode length = frameState.ipop();
         if (type instanceof ResolvedJavaType) {
-            NewArrayNode n = currentGraph.add(new NewArrayNode((ResolvedJavaType) type, length, true, false));
-            frameState.apush(append(n));
+            frameState.apush(append(new NewArrayNode((ResolvedJavaType) type, length, true)));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
-            frameState.apush(appendConstant(Constant.NULL_OBJECT));
+            handleUnresolvedNewObjectArray(type, length);
         }
 
     }
 
-    private void genNewMultiArray(int cpi) {
+    public void genNewMultiArray(int cpi) {
         JavaType type = lookupType(cpi, MULTIANEWARRAY);
         int rank = stream().readUByte(bci() + 3);
         ValueNode[] dims = new ValueNode[rank];
@@ -827,25 +911,21 @@ public class LancetGraphBuilder {
             dims[i] = frameState.ipop();
         }
         if (type instanceof ResolvedJavaType) {
-            FixedWithNextNode n = currentGraph.add(new NewMultiArrayNode((ResolvedJavaType) type, dims));
-            frameState.apush(append(n));
+            frameState.apush(append(new NewMultiArrayNode((ResolvedJavaType) type, dims)));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
-            frameState.apush(appendConstant(Constant.NULL_OBJECT));
+            handleUnresolvedNewMultiArray(type, dims);
         }
     }
 
-    private void genGetField(JavaField field) {
+    public void genGetField(JavaField field) {
         emitExplicitExceptions(frameState.peek(0), null);
 
         Kind kind = field.getKind();
         ValueNode receiver = frameState.apop();
         if ((field instanceof ResolvedJavaField) && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
-            LoadFieldNode load = currentGraph.add(new LoadFieldNode(receiver, (ResolvedJavaField) field));
-            appendOptimizedLoadField(kind, load);
+            appendOptimizedLoadField(kind, new LoadFieldNode(receiver, (ResolvedJavaField) field));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
-            frameState.push(kind.getStackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
+            handleUnresolvedLoadField(field, receiver);
         }
     }
 
@@ -860,182 +940,184 @@ public class LancetGraphBuilder {
         }
     }
 
-    private void emitNullCheck(ValueNode receiver) {
+    public void emitNullCheck(ValueNode receiver) {
         if (receiver.stamp().nonNull()) {
             return;
         }
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.1));
-
-        append(ifNode);
+        append(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.01));
         lastInstr = falseSucc;
 
-        if (GraalOptions.OmitHotExceptionStacktrace) {
+        if (OmitHotExceptionStacktrace.getValue()) {
             ValueNode exception = ConstantNode.forObject(cachedNullPointerException, runtime, currentGraph);
             trueSucc.setNext(handleException(exception, bci()));
         } else {
-            RuntimeCallNode call = currentGraph.add(new RuntimeCallNode(RuntimeCalls.CREATE_NULL_POINTER_EXCEPTION));
+            ForeignCallNode call = currentGraph.add(new ForeignCallNode(runtime, CREATE_NULL_POINTER_EXCEPTION));
             call.setStateAfter(frameState.create(bci()));
             trueSucc.setNext(call);
             call.setNext(handleException(call, bci()));
         }
     }
 
-    private static final ArrayIndexOutOfBoundsException cachedArrayIndexOutOfBoundsException = new ArrayIndexOutOfBoundsException();
-    private static final NullPointerException cachedNullPointerException = new NullPointerException();
+    public static final ArrayIndexOutOfBoundsException cachedArrayIndexOutOfBoundsException = new ArrayIndexOutOfBoundsException();
+    public static final NullPointerException cachedNullPointerException = new NullPointerException();
     static {
         cachedArrayIndexOutOfBoundsException.setStackTrace(new StackTraceElement[0]);
         cachedNullPointerException.setStackTrace(new StackTraceElement[0]);
     }
 
-    private void emitBoundsCheck(ValueNode index, ValueNode length) {
+    public void emitBoundsCheck(ValueNode index, ValueNode length) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.9));
-
-        append(ifNode);
+        append(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.99));
         lastInstr = trueSucc;
 
-        if (GraalOptions.OmitHotExceptionStacktrace) {
+        if (OmitHotExceptionStacktrace.getValue()) {
             ValueNode exception = ConstantNode.forObject(cachedArrayIndexOutOfBoundsException, runtime, currentGraph);
             falseSucc.setNext(handleException(exception, bci()));
         } else {
-            RuntimeCallNode call = currentGraph.add(new RuntimeCallNode(RuntimeCalls.CREATE_OUT_OF_BOUNDS_EXCEPTION, index));
+            ForeignCallNode call = currentGraph.add(new ForeignCallNode(runtime, CREATE_OUT_OF_BOUNDS_EXCEPTION, index));
             call.setStateAfter(frameState.create(bci()));
             falseSucc.setNext(call);
             call.setNext(handleException(call, bci()));
         }
     }
 
-    private void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
+    public void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
         assert receiver != null;
-        if (!GraalOptions.AllowExplicitExceptionChecks || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE)) {
+        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
             return;
         }
 
         emitNullCheck(receiver);
         if (outOfBoundsIndex != null) {
-            ValueNode length = append(currentGraph.add(new ArrayLengthNode(receiver)));
+            ValueNode length = append(new ArrayLengthNode(receiver));
             emitBoundsCheck(outOfBoundsIndex, length);
         }
         Debug.metric("ExplicitExceptions").increment();
     }
 
-    private void genPutField(JavaField field) {
+    public void genPutField(JavaField field) {
         emitExplicitExceptions(frameState.peek(1), null);
 
         ValueNode value = frameState.pop(field.getKind().getStackKind());
         ValueNode receiver = frameState.apop();
         if (field instanceof ResolvedJavaField && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
-            StoreFieldNode store = currentGraph.add(new StoreFieldNode(receiver, (ResolvedJavaField) field, value));
-            appendOptimizedStoreField(store);
+            appendOptimizedStoreField(new StoreFieldNode(receiver, (ResolvedJavaField) field, value));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
+            handleUnresolvedStoreField(field, value, receiver);
         }
     }
 
-    private void genGetStatic(JavaField field) {
+    public void genGetStatic(JavaField field) {
         Kind kind = field.getKind();
         if (field instanceof ResolvedJavaField && ((ResolvedJavaType) field.getDeclaringClass()).isInitialized()) {
-            Constant constantValue = ((ResolvedJavaField) field).readConstantValue(null);
-            if (constantValue != null) {
-                frameState.push(constantValue.getKind().getStackKind(), appendConstant(constantValue));
-            } else {
-                LoadFieldNode load = currentGraph.add(new LoadFieldNode(null, (ResolvedJavaField) field));
-                appendOptimizedLoadField(kind, load);
-            }
+            appendOptimizedLoadField(kind, new LoadFieldNode(null, (ResolvedJavaField) field));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
-            frameState.push(kind.getStackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
+            handleUnresolvedLoadField(field, null);
         }
     }
 
-    private void genPutStatic(JavaField field) {
+    public void genPutStatic(JavaField field) {
         ValueNode value = frameState.pop(field.getKind().getStackKind());
         if (field instanceof ResolvedJavaField && ((ResolvedJavaType) field.getDeclaringClass()).isInitialized()) {
-            StoreFieldNode store = currentGraph.add(new StoreFieldNode(null, (ResolvedJavaField) field, value));
-            appendOptimizedStoreField(store);
+            appendOptimizedStoreField(new StoreFieldNode(null, (ResolvedJavaField) field, value));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
+            handleUnresolvedStoreField(field, value, null);
         }
     }
 
-    private ConstantNode genTypeOrDeopt(Representation representation, JavaType holder, boolean initialized) {
+    public ConstantNode genTypeOrDeopt(Representation representation, JavaType type, boolean initialized) {
         if (initialized) {
-            return appendConstant(((ResolvedJavaType) holder).getEncoding(representation));
+            return appendConstant(((ResolvedJavaType) type).getEncoding(representation));
         } else {
-            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
+            handleUnresolvedExceptionType(representation, type);
             return null;
         }
     }
 
-    private void appendOptimizedStoreField(StoreFieldNode store) {
+    public void appendOptimizedStoreField(StoreFieldNode store) {
         append(store);
     }
 
-    private void appendOptimizedLoadField(Kind kind, LoadFieldNode load) {
+    public void appendOptimizedLoadField(Kind kind, LoadFieldNode load) {
         // append the load to the instruction
         ValueNode optimized = append(load);
         frameState.push(kind.getStackKind(), optimized);
     }
 
-    private void genInvokeStatic(JavaMethod target) {
+    public void genInvokeStatic(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
             ResolvedJavaMethod resolvedTarget = (ResolvedJavaMethod) target;
             ResolvedJavaType holder = resolvedTarget.getDeclaringClass();
-            if (!holder.isInitialized() && GraalOptions.ResolveClassBeforeStaticInvoke) {
-                genInvokeDeopt(target, false);
+            if (!holder.isInitialized() && ResolveClassBeforeStaticInvoke.getValue()) {
+                handleUnresolvedInvoke(target, InvokeKind.Static);
             } else {
                 ValueNode[] args = frameState.popArguments(resolvedTarget.getSignature().getParameterSlots(false), resolvedTarget.getSignature().getParameterCount(false));
                 appendInvoke(InvokeKind.Static, resolvedTarget, args);
             }
         } else {
-            genInvokeDeopt(target, false);
+            handleUnresolvedInvoke(target, InvokeKind.Static);
         }
     }
 
-    private void genInvokeInterface(JavaMethod target) {
+    public void genInvokeInterface(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
             ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
             genInvokeIndirect(InvokeKind.Interface, (ResolvedJavaMethod) target, args);
         } else {
-            genInvokeDeopt(target, true);
+            handleUnresolvedInvoke(target, InvokeKind.Interface);
         }
     }
 
-    protected void genInvokeVirtual(JavaMethod target) {
+    public void genInvokeDynamic(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
-            System.out.println("Frame state: ====> " + frameState);
-            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
-            genInvokeIndirect(InvokeKind.Virtual, (ResolvedJavaMethod) target, args);
+            Object appendix = constantPool.lookupAppendix(stream.readCPI4(), Bytecodes.INVOKEDYNAMIC);
+            if (appendix != null) {
+                frameState.apush(ConstantNode.forObject(appendix, runtime, currentGraph));
+            }
+            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(false), target.getSignature().getParameterCount(false));
+            appendInvoke(InvokeKind.Static, (ResolvedJavaMethod) target, args);
         } else {
-            genInvokeDeopt(target, true);
+            handleUnresolvedInvoke(target, InvokeKind.Static);
+        }
+    }
+
+    public void genInvokeVirtual(JavaMethod target) {
+        if (target instanceof ResolvedJavaMethod) {
+            // Special handling for runtimes that rewrite an invocation of MethodHandle.invoke(...)
+            // or MethodHandle.invokeExact(...) to a static adapter. HotSpot does this - see
+            // https://wikis.oracle.com/display/HotSpotInternals/Method+handles+and+invokedynamic
+            boolean hasReceiver = !isStatic(((ResolvedJavaMethod) target).getModifiers());
+            Object appendix = constantPool.lookupAppendix(stream.readCPI(), Bytecodes.INVOKEVIRTUAL);
+            if (appendix != null) {
+                frameState.apush(ConstantNode.forObject(appendix, runtime, currentGraph));
+            }
+            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(hasReceiver), target.getSignature().getParameterCount(hasReceiver));
+            if (hasReceiver) {
+                genInvokeIndirect(InvokeKind.Virtual, (ResolvedJavaMethod) target, args);
+            } else {
+                appendInvoke(InvokeKind.Static, (ResolvedJavaMethod) target, args);
+            }
+        } else {
+            handleUnresolvedInvoke(target, InvokeKind.Virtual);
         }
 
     }
 
-    private void genInvokeSpecial(JavaMethod target) {
+    public void genInvokeSpecial(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
             assert target != null;
             assert target.getSignature() != null;
             ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
             invokeDirect((ResolvedJavaMethod) target, args);
         } else {
-            genInvokeDeopt(target, true);
+            handleUnresolvedInvoke(target, InvokeKind.Special);
         }
     }
 
-    private void genInvokeDeopt(JavaMethod unresolvedTarget, boolean withReceiver) {
-        append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved)));
-        frameState.popArguments(unresolvedTarget.getSignature().getParameterSlots(withReceiver), unresolvedTarget.getSignature().getParameterCount(withReceiver));
-        Kind kind = unresolvedTarget.getSignature().getReturnKind();
-        if (kind != Kind.Void) {
-            frameState.push(kind.getStackKind(), append(ConstantNode.defaultForKind(kind, currentGraph)));
-        }
-    }
-
-    protected void genInvokeIndirect(InvokeKind invokeKind, ResolvedJavaMethod target, ValueNode[] args) {
+    public void genInvokeIndirect(InvokeKind invokeKind, ResolvedJavaMethod target, ValueNode[] args) {
         ValueNode receiver = args[0];
         // attempt to devirtualize the call
         ResolvedJavaType klass = target.getDeclaringClass();
@@ -1053,47 +1135,50 @@ public class LancetGraphBuilder {
         }
         if (exact != null) {
             // either the holder class is exact, or the receiver object has an exact type
-            invokeDirect(exact.resolveMethod(target), args);
-            return;
+            ResolvedJavaMethod exactMethod = exact.resolveMethod(target);
+            if (exactMethod != null) {
+                invokeDirect(exactMethod, args);
+                return;
+            }
         }
         // devirtualization failed, produce an actual invokevirtual
         appendInvoke(invokeKind, target, args);
     }
 
-    private void invokeDirect(ResolvedJavaMethod target, ValueNode[] args) {
+    public void invokeDirect(ResolvedJavaMethod target, ValueNode[] args) {
         appendInvoke(InvokeKind.Special, target, args);
     }
 
-    private void appendInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
+    public void appendInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
         Kind resultType = targetMethod.getSignature().getReturnKind();
-        if (GraalOptions.DeoptALot) {
-            DeoptimizeNode deoptimize = currentGraph.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint));
-            deoptimize.setMessage(targetMethod.getName());
-            append(deoptimize);
+        if (DeoptALot.getValue()) {
+            append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
             frameState.pushReturn(resultType, ConstantNode.defaultForKind(resultType, currentGraph));
-            System.out.println("DeoptALot after push return: " + frameState);
             return;
         }
 
         JavaType returnType = targetMethod.getSignature().getReturnType(method.getDeclaringClass());
-        if (graphBuilderConfig.eagerResolvingForSnippets()) {
+        if (graphBuilderConfig.eagerResolving()) {
             returnType = returnType.resolve(targetMethod.getDeclaringClass());
         }
+        if (invokeKind != InvokeKind.Static && invokeKind != InvokeKind.Special) {
+            JavaTypeProfile profile = profilingInfo.getTypeProfile(bci());
+            args[0] = TypeProfileProxyNode.create(args[0], profile);
+        }
         MethodCallTargetNode callTarget = currentGraph.add(new MethodCallTargetNode(invokeKind, targetMethod, args, returnType));
+        createInvokeNode(callTarget, resultType);
+    }
+
+    public Invoke createInvokeNode(CallTargetNode callTarget, Kind resultType) {
         // be conservative if information was not recorded (could result in endless recompiles
         // otherwise)
-        if (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
-            ValueNode result = appendWithBCI(currentGraph.add(new InvokeNode(callTarget, bci())));
-            System.out.println("Result: " + result);
-            System.out.println("Probability before push return: " + frameState);
-            frameState.pushReturn(resultType, result);
-            System.out.println("Probability after push return: " + frameState);
+        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
+            frameState.pushReturn(resultType, append(new InvokeNode(callTarget, bci())));
+            return new InvokeNode(callTarget, bci());
         } else {
             DispatchBeginNode exceptionEdge = handleException(null, bci());
-            InvokeWithExceptionNode invoke = currentGraph.add(new InvokeWithExceptionNode(callTarget, exceptionEdge, bci()));
-            ValueNode result = append(invoke);
-            frameState.pushReturn(resultType, result);
-            System.out.println("After push return: " + frameState);
+            InvokeWithExceptionNode invoke = append(new InvokeWithExceptionNode(callTarget, exceptionEdge, bci()));
+            frameState.pushReturn(resultType, invoke);
             Block nextBlock = currentBlock.successors.get(0);
 
             assert bci() == currentBlock.endBci;
@@ -1101,16 +1186,11 @@ public class LancetGraphBuilder {
 
             invoke.setNext(createTarget(nextBlock, frameState));
             invoke.setStateAfter(frameState.create(nextBlock.startBci));
-            throw new RuntimeException("Lancet is not built for this case!!!");
+            return invoke;
         }
     }
 
-    private void callRegisterFinalizer() {
-        // append a call to the finalizer registration
-        append(currentGraph.add(new RegisterFinalizerNode(frameState.loadLocal(0))));
-    }
-
-    private void genReturn(ValueNode x) {
+    public void genReturn(ValueNode x) {
         frameState.clearStack();
         if (x != null) {
             frameState.push(x.kind(), x);
@@ -1118,24 +1198,22 @@ public class LancetGraphBuilder {
         appendGoto(createTarget(returnBlock(bci()), frameState));
     }
 
-    private MonitorEnterNode genMonitorEnter(ValueNode x) {
+    public MonitorEnterNode genMonitorEnter(ValueNode x) {
+        MonitorEnterNode monitorEnter = append(new MonitorEnterNode(x, frameState.lockDepth()));
         frameState.pushLock(x);
-        MonitorEnterNode monitorEnter = currentGraph.add(new MonitorEnterNode(x));
-        appendWithBCI(monitorEnter);
         return monitorEnter;
     }
 
-    private MonitorExitNode genMonitorExit(ValueNode x) {
+    public MonitorExitNode genMonitorExit(ValueNode x) {
         ValueNode lockedObject = frameState.popLock();
         if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
             throw new BailoutException("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject));
         }
-        MonitorExitNode monitorExit = currentGraph.add(new MonitorExitNode(x));
-        appendWithBCI(monitorExit);
+        MonitorExitNode monitorExit = append(new MonitorExitNode(x, frameState.lockDepth()));
         return monitorExit;
     }
 
-    private void genJsr(int dest) {
+    public void genJsr(int dest) {
         Block successor = currentBlock.jsrSuccessor;
         assert successor.startBci == dest : successor.startBci + " != " + dest + " @" + bci();
         JsrScope scope = currentBlock.jsrScope;
@@ -1149,20 +1227,19 @@ public class LancetGraphBuilder {
         appendGoto(createTarget(successor, frameState));
     }
 
-    private void genRet(int localIndex) {
+    public void genRet(int localIndex) {
         Block successor = currentBlock.retSuccessor;
         ValueNode local = frameState.loadLocal(localIndex);
         JsrScope scope = currentBlock.jsrScope;
         int retAddress = scope.nextReturnAddress();
-        append(currentGraph.add(new FixedGuardNode(currentGraph.unique(new IntegerEqualsNode(local, ConstantNode.forInt(retAddress, currentGraph))), DeoptimizationReason.JavaSubroutineMismatch,
-                        DeoptimizationAction.InvalidateReprofile)));
+        append(new FixedGuardNode(currentGraph.unique(new IntegerEqualsNode(local, ConstantNode.forInt(retAddress, currentGraph))), JavaSubroutineMismatch, InvalidateReprofile));
         if (!successor.jsrScope.equals(scope.pop())) {
             throw new JsrNotSupportedBailout("unstructured control flow (ret leaves more than one scope)");
         }
         appendGoto(createTarget(successor, frameState));
     }
 
-    private double[] switchProbability(int numberOfCases, int bci) {
+    public double[] switchProbability(int numberOfCases, int bci) {
         double[] prob = profilingInfo.getSwitchProbabilities(bci);
         if (prob != null) {
             assert prob.length == numberOfCases;
@@ -1177,7 +1254,7 @@ public class LancetGraphBuilder {
         return prob;
     }
 
-    private static boolean allPositive(double[] a) {
+    public static boolean allPositive(double[] a) {
         for (double d : a) {
             if (d < 0) {
                 return false;
@@ -1191,7 +1268,7 @@ public class LancetGraphBuilder {
      *
      * @return an array of size successorCount with the accumulated probability for each successor.
      */
-    private static double[] successorProbabilites(int successorCount, int[] keySuccessors, double[] keyProbabilities) {
+    public static double[] successorProbabilites(int successorCount, int[] keySuccessors, double[] keyProbabilities) {
         double[] probability = new double[successorCount];
         for (int i = 0; i < keySuccessors.length; i++) {
             probability[keySuccessors[i]] += keyProbabilities[i];
@@ -1199,7 +1276,7 @@ public class LancetGraphBuilder {
         return probability;
     }
 
-    private void genSwitch(BytecodeSwitch bs) {
+    public void genSwitch(BytecodeSwitch bs) {
         int bci = bci();
         ValueNode value = frameState.ipop();
 
@@ -1242,15 +1319,14 @@ public class LancetGraphBuilder {
         }
 
         double[] successorProbabilities = successorProbabilites(actualSuccessors.size(), keySuccessors, keyProbabilities);
-        IntegerSwitchNode switchNode = currentGraph.add(new IntegerSwitchNode(value, actualSuccessors.size(), keys, keyProbabilities, keySuccessors));
+        IntegerSwitchNode switchNode = append(new IntegerSwitchNode(value, actualSuccessors.size(), keys, keyProbabilities, keySuccessors));
         for (int i = 0; i < actualSuccessors.size(); i++) {
             switchNode.setBlockSuccessor(i, createBlockTarget(successorProbabilities[i], actualSuccessors.get(i), frameState));
         }
 
-        append(switchNode);
     }
 
-    private static class SuccessorInfo {
+    public static class SuccessorInfo {
 
         int blockIndex;
         int actualIndex;
@@ -1266,32 +1342,43 @@ public class LancetGraphBuilder {
         return ConstantNode.forConstant(constant, runtime, currentGraph);
     }
 
-    public ValueNode append(FixedNode fixed) {
-        lastInstr.setNext(fixed);
-        lastInstr = null;
-        return fixed;
-    }
-
-    public ValueNode append(FixedWithNextNode x) {
-        return appendWithBCI(x);
-    }
-
-    public ValueNode append(ValueNode v) {
-        return v;
-    }
-
-    private ValueNode appendWithBCI(FixedWithNextNode x) {
-        assert x.predecessor() == null : "instruction should not have been appended yet";
+    public <T extends ControlSinkNode> T append(T fixed) {
+        assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
         assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
-        lastInstr.setNext(x);
-        lastInstr = x;
-        return x;
+        T added = currentGraph.add(fixed);
+        lastInstr.setNext(added);
+        lastInstr = null;
+        return added;
+    }
+
+    public <T extends ControlSplitNode> T append(T fixed) {
+        assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
+        assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
+        T added = currentGraph.add(fixed);
+        lastInstr.setNext(added);
+        lastInstr = null;
+        return added;
+    }
+
+    public <T extends FixedWithNextNode> T append(T fixed) {
+        assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
+        assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
+        T added = currentGraph.add(fixed);
+        lastInstr.setNext(added);
+        lastInstr = added;
+        return added;
+    }
+
+    public <T extends FloatingNode> T append(T v) {
+        assert !(v instanceof ConstantNode);
+        T added = currentGraph.unique(v);
+        return added;
     }
 
     public static class Target {
 
-        public FixedNode fixed;
-        public FrameStateBuilder state;
+        FixedNode fixed;
+        FrameStateBuilder state;
 
         public Target(FixedNode fixed, FrameStateBuilder state) {
             this.fixed = fixed;
@@ -1299,7 +1386,7 @@ public class LancetGraphBuilder {
         }
     }
 
-    private Target checkLoopExit(FixedNode target, Block targetBlock, FrameStateBuilder state) {
+    public Target checkLoopExit(FixedNode target, Block targetBlock, FrameStateBuilder state) {
         if (currentBlock != null) {
             long exits = currentBlock.loops & ~targetBlock.loops;
             if (exits != 0) {
@@ -1352,21 +1439,21 @@ public class LancetGraphBuilder {
         return new Target(target, state);
     }
 
-    private FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {
+    public FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {
         assert probability >= 0 && probability <= 1.01 : probability;
         if (isNeverExecutedCode(probability)) {
-            return currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.UnreachedCode));
+            return currentGraph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
         } else {
             assert block != null;
             return createTarget(block, stateAfter);
         }
     }
 
-    private boolean isNeverExecutedCode(double probability) {
+    public boolean isNeverExecutedCode(double probability) {
         return probability == 0 && optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI;
     }
 
-    private FixedNode createTarget(Block block, FrameStateBuilder state) {
+    public FixedNode createTarget(Block block, FrameStateBuilder state) {
         assert block != null && state != null;
         assert !block.isExceptionEntry || state.stackSize() == 1;
 
@@ -1412,7 +1499,7 @@ public class LancetGraphBuilder {
             BlockPlaceholderNode placeholder = (BlockPlaceholderNode) block.firstInstruction;
 
             // The EndNode for the already existing edge.
-            EndNode end = currentGraph.add(new EndNode());
+            AbstractEndNode end = currentGraph.add(new EndNode());
             // The MergeNode that replaces the placeholder.
             MergeNode mergeNode = currentGraph.add(new MergeNode());
             FixedNode next = placeholder.next();
@@ -1427,7 +1514,7 @@ public class LancetGraphBuilder {
         MergeNode mergeNode = (MergeNode) block.firstInstruction;
 
         // The EndNode for the newly merged edge.
-        EndNode newEnd = currentGraph.add(new EndNode());
+        AbstractEndNode newEnd = currentGraph.add(new EndNode());
         Target target = checkLoopExit(newEnd, block, state);
         FixedNode result = target.fixed;
         block.entryState.merge(mergeNode, target.state);
@@ -1441,25 +1528,25 @@ public class LancetGraphBuilder {
      * Returns a block begin node with the specified state. If the specified probability is 0, the
      * block deoptimizes immediately.
      */
-    private BeginNode createBlockTarget(double probability, Block block, FrameStateBuilder stateAfter) {
+    public AbstractBeginNode createBlockTarget(double probability, Block block, FrameStateBuilder stateAfter) {
         FixedNode target = createTarget(probability, block, stateAfter);
-        BeginNode begin = BeginNode.begin(target);
+        AbstractBeginNode begin = AbstractBeginNode.begin(target);
 
         assert !(target instanceof DeoptimizeNode && begin.stateAfter() != null) : "We are not allowed to set the stateAfter of the begin node, because we have to deoptimize "
                         + "to a bci _before_ the actual if, so that the interpreter can update the profiling information.";
         return begin;
     }
 
-    private ValueNode synchronizedObject(FrameStateBuilder state, ResolvedJavaMethod target) {
+    public ValueNode synchronizedObject(FrameStateBuilder state, ResolvedJavaMethod target) {
         if (isStatic(target.getModifiers())) {
-            return append(ConstantNode.forConstant(target.getDeclaringClass().getEncoding(Representation.JavaClass), runtime, currentGraph));
+            return appendConstant(target.getDeclaringClass().getEncoding(Representation.JavaClass));
         } else {
             return state.loadLocal(0);
         }
     }
 
-    private void processBlock(Block block) {
-        // Ignore blocks that have no predecessors by the time it their bytecodes are parsed
+    public void processBlock(Block block) {
+        // Ignore blocks that have no predecessors by the time their bytecodes are parsed
         if (block == null || block.firstInstruction == null) {
             Debug.log("Ignoring block %s", block);
             return;
@@ -1493,7 +1580,7 @@ public class LancetGraphBuilder {
         }
     }
 
-    private void connectLoopEndToBegin() {
+    public void connectLoopEndToBegin() {
         for (LoopBeginNode begin : currentGraph.getNodes(LoopBeginNode.class)) {
             if (begin.loopEnds().isEmpty()) {
                 // @formatter:off
@@ -1514,37 +1601,38 @@ public class LancetGraphBuilder {
         }
     }
 
-    private void createUnwind() {
+    public void createUnwind() {
         assert frameState.stackSize() == 1 : frameState;
+        ValueNode exception = frameState.apop();
+        append(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
         synchronizedEpilogue(FrameState.AFTER_EXCEPTION_BCI);
-        UnwindNode unwindNode = currentGraph.add(new UnwindNode(frameState.apop()));
-        append(unwindNode);
+        append(new UnwindNode(exception));
     }
 
-    private void createReturn() {
-        if (method.isConstructor() && MetaUtil.isJavaLangObject(method.getDeclaringClass())) {
-            callRegisterFinalizer();
-        }
+    public void createReturn() {
         Kind returnKind = method.getSignature().getReturnKind().getStackKind();
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
 
-        // TODO (gdub) remove this when FloatingRead can handle this case
         if (Modifier.isSynchronized(method.getModifiers())) {
-            append(currentGraph.add(new ValueAnchorNode(x)));
+            append(new ValueAnchorNode(true, x));
             assert !frameState.rethrowException();
         }
 
         synchronizedEpilogue(FrameState.AFTER_BCI);
-        if (!frameState.locksEmpty()) {
+        if (frameState.lockDepth() != 0) {
             throw new BailoutException("unbalanced monitors");
         }
-        ReturnNode returnNode = currentGraph.add(new ReturnNode(x));
 
-        append(returnNode);
+        if (graphBuilderConfig.eagerInfopointMode()) {
+            InfopointNode ipn = append(new InfopointNode(InfopointReason.METHOD_END));
+            ipn.setStateAfter(frameState.create(FrameState.AFTER_BCI));
+        }
+
+        append(new ReturnNode(x));
     }
 
-    private void synchronizedEpilogue(int bci) {
+    public void synchronizedEpilogue(int bci) {
         if (Modifier.isSynchronized(method.getModifiers())) {
             MonitorExitNode monitorExit = genMonitorExit(methodSynchronizedObject);
             monitorExit.setStateAfter(frameState.create(bci));
@@ -1552,7 +1640,7 @@ public class LancetGraphBuilder {
         }
     }
 
-    private void createExceptionDispatch(ExceptionDispatchBlock block) {
+    public void createExceptionDispatch(ExceptionDispatchBlock block) {
         assert frameState.stackSize() == 1 : frameState;
         if (block.handler.isCatchAll()) {
             assert block.successors.size() == 1;
@@ -1579,7 +1667,7 @@ public class LancetGraphBuilder {
         if (typeInstruction != null) {
             Block nextBlock = block.successors.size() == 1 ? unwindBlock(block.deoptBci) : block.successors.get(1);
             ValueNode exception = frameState.stackAt(0);
-            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null));
+            CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null, false));
             frameState.apop();
             frameState.push(Kind.Object, checkCast);
             FixedNode catchSuccessor = createTarget(block.successors.get(0), frameState);
@@ -1587,22 +1675,21 @@ public class LancetGraphBuilder {
             frameState.push(Kind.Object, exception);
             FixedNode nextDispatch = createTarget(nextBlock, frameState);
             checkCast.setNext(catchSuccessor);
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode((ResolvedJavaType) catchType, exception, null)), checkCast, nextDispatch, 0.5));
-            append(ifNode);
+            append(new IfNode(currentGraph.unique(new InstanceOfNode((ResolvedJavaType) catchType, exception, null)), checkCast, nextDispatch, 0.5));
         }
     }
 
-    protected void appendGoto(FixedNode target) {
+    public void appendGoto(FixedNode target) {
         if (lastInstr != null) {
             lastInstr.setNext(target);
         }
     }
 
-    private static boolean isBlockEnd(Node n) {
+    public static boolean isBlockEnd(Node n) {
         return trueSuccessorCount(n) > 1 || n instanceof ReturnNode || n instanceof UnwindNode || n instanceof DeoptimizeNode;
     }
 
-    private static int trueSuccessorCount(Node n) {
+    public static int trueSuccessorCount(Node n) {
         if (n == null) {
             return 0;
         }
@@ -1615,11 +1702,11 @@ public class LancetGraphBuilder {
         return i;
     }
 
-    private void iterateBytecodesForBlock(Block block) {
+    public void iterateBytecodesForBlock(Block block) {
         if (block.isLoopHeader) {
             // Create the loop header block, which later will merge the backward branches of the
             // loop.
-            EndNode preLoopEnd = currentGraph.add(new EndNode());
+            AbstractEndNode preLoopEnd = currentGraph.add(new EndNode());
             LoopBeginNode loopBegin = currentGraph.add(new LoopBeginNode());
             lastInstr.setNext(preLoopEnd);
             // Add the single non-loop predecessor of the loop header.
@@ -1651,13 +1738,24 @@ public class LancetGraphBuilder {
         BytecodesParsed.add(block.endBci - bci);
 
         while (bci < endBCI) {
+            if (graphBuilderConfig.eagerInfopointMode() && lnt != null) {
+                currentLineNumber = lnt.getLineNumber(bci);
+                if (currentLineNumber != previousLineNumber) {
+                    InfopointNode ipn = append(new InfopointNode(InfopointReason.LINE_NUMBER));
+                    ipn.setStateAfter(frameState.create(bci));
+                    previousLineNumber = currentLineNumber;
+                }
+            }
+
             // read the opcode
             int opcode = stream.currentBC();
             traceState();
             traceInstruction(bci, opcode, bci == block.startBci);
             if (bci == entryBCI) {
-                EntryMarkerNode x = currentGraph.add(new EntryMarkerNode());
-                append(x);
+                if (block.jsrScope != JsrScope.EMPTY_SCOPE) {
+                    throw new BailoutException("OSR into a JSR scope is not supported");
+                }
+                EntryMarkerNode x = append(new EntryMarkerNode());
                 frameState.insertProxies(x);
                 x.setStateAfter(frameState.create(bci));
             }
@@ -1674,7 +1772,7 @@ public class LancetGraphBuilder {
                 frameState.clearNonLiveLocals(currentBlock.localsLiveOut);
             }
             if (lastInstr instanceof StateSplit) {
-                if (lastInstr.getClass() == BeginNode.class) {
+                if (lastInstr.getClass() == AbstractBeginNode.class) {
                     // BeginNodes do not need a frame state
                 } else {
                     StateSplit stateSplit = (StateSplit) lastInstr;
@@ -1695,21 +1793,21 @@ public class LancetGraphBuilder {
         }
     }
 
-    private void traceState() {
-        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_STATE && !TTY.isSuppressed()) {
-            TTY.println(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
+    public void traceState() {
+        if (TraceBytecodeParserLevel.getValue() >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
+            Debug.log(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
             for (int i = 0; i < frameState.localsSize(); ++i) {
                 ValueNode value = frameState.localAt(i);
-                TTY.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                Debug.log(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
             }
             for (int i = 0; i < frameState.stackSize(); ++i) {
                 ValueNode value = frameState.stackAt(i);
-                TTY.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                Debug.log(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
             }
         }
     }
 
-    private void processBytecode(int bci, int opcode) {
+    public void processBytecode(int bci, int opcode) {
         int cpi;
 
         // Checkstyle: stop
@@ -1901,6 +1999,7 @@ public class LancetGraphBuilder {
             case INVOKESPECIAL  : cpi = stream.readCPI(); genInvokeSpecial(lookupMethod(cpi, opcode)); break;
             case INVOKESTATIC   : cpi = stream.readCPI(); genInvokeStatic(lookupMethod(cpi, opcode)); break;
             case INVOKEINTERFACE: cpi = stream.readCPI(); genInvokeInterface(lookupMethod(cpi, opcode)); break;
+            case INVOKEDYNAMIC  : cpi = stream.readCPI4(); genInvokeDynamic(lookupMethod(cpi, opcode)); break;
             case NEW            : genNewInstance(stream.readCPI()); break;
             case NEWARRAY       : genNewPrimitiveArray(stream.readLocalIndex()); break;
             case ANEWARRAY      : genNewObjectArray(stream.readCPI()); break;
@@ -1924,8 +2023,8 @@ public class LancetGraphBuilder {
         // Checkstyle: resume
     }
 
-    private void traceInstruction(int bci, int opcode, boolean blockStart) {
-        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_INSTRUCTIONS && !TTY.isSuppressed()) {
+    public void traceInstruction(int bci, int opcode, boolean blockStart) {
+        if (TraceBytecodeParserLevel.getValue() >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
             StringBuilder sb = new StringBuilder(40);
             sb.append(blockStart ? '+' : '|');
             if (bci < 10) {
@@ -1940,11 +2039,12 @@ public class LancetGraphBuilder {
             if (!currentBlock.jsrScope.isEmpty()) {
                 sb.append(' ').append(currentBlock.jsrScope);
             }
-            TTY.println(sb.toString());
+            Debug.log(sb.toString());
         }
     }
 
     public void genArrayLength() {
-        frameState.ipush(append(currentGraph.add(new ArrayLengthNode(frameState.apop()))));
+        frameState.ipush(append(new ArrayLengthNode(frameState.apop())));
     }
 }
+

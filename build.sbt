@@ -12,6 +12,8 @@ scalaOrganization := "org.scala-lang.virtualized"
 
 scalacOptions += "-Yvirtualize"
 
+compileOrder := CompileOrder.JavaThenScala
+
 // tests are not thread safe
 parallelExecution in Test := false
 
@@ -94,7 +96,8 @@ unmanagedClasspath in Compile <++= baseDirectory map { base =>
     "com.oracle.truffle.jxinterface",
     "com.oracle.truffle.py",
     "com.oracle.truffle.serial",
-    "com.oracle.truffle.serial.test"
+    "com.oracle.truffle.serial.test",
+    "com.oracle.graal.options"
   ) map (graal / _ / "bin")
 }
 
