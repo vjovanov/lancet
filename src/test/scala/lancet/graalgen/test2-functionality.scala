@@ -37,7 +37,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-functionality"
 
-  /*def testPrinting = withOutFile(prefix+"-print") {
+  def testPrinting = withOutFile(prefix+"-print") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
@@ -60,8 +60,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-print-o"){
       f(1)
     }
-    }
-  }*/
+  }
 
   def testArithmetics = withOutFile(prefix+"-arithmetics") {
     trait Prog extends DSL {

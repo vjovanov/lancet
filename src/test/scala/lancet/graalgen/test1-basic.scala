@@ -35,7 +35,6 @@ import scala.virtualization.lms.common._
 import scala.virtualization.lms.util.OverloadHack
 
 trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPrimitives with LiftString with LiftVariables
-  with VectArrayOps
 {
   def main(arg: Rep[Int]): Rep[Int]
 }
@@ -49,7 +48,6 @@ trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with
     with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps
     with GraalGenEqual with GraalGenStringOps with GraalGenIOOps with GraalGenMiscOps
     with GraalGenNumericOps
-    with GraalGenVectArrayOps
     { val IR: self.type = self
 
     val f = (x: Int) => { // TODO this is needed for now to trick the FrameStateBuilder.

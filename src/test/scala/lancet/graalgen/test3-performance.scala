@@ -35,7 +35,6 @@ import scala.virtualization.lms.util.OverloadHack
 import lancet.core._
 // DRY :)
 trait KMeansImpl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp
-  with VectArrayOpsExp
   { self =>
   def params(i: Int, b: Int, c: Int) = ???
   val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse
