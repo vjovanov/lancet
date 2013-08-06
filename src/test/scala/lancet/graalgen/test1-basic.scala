@@ -40,7 +40,6 @@ trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPr
 }
 
 trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp
-  with VectArrayOpsExp
   { self =>
   def params(i: Int, b: Int, c: Int) = ???
 
