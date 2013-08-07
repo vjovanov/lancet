@@ -13,16 +13,15 @@ trait GraalGenVariables extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case NewVar(c) =>
-      insert(sym)
+    case NewVar(c) => ssa(sym) {
       push(c)
-      storeLocal(kind(sym), lookup(sym))
+    }
     case ReadVar(Variable(a)) =>
       insert(sym, a.asInstanceOf[Sym[Any]]) // alias stack position
       push(a)
       storeLocal(kind(a), lookup(sym))
     case VarPlusEquals(Variable(a), b) =>
-      ???
+      ??? // Maybe fix these malitious cases with lowering. Check with Tiark.
     case Assign(Variable(a), b) =>
       insert(sym, a.asInstanceOf[Sym[_]]) // alias stack position
       push(b)

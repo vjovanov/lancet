@@ -14,15 +14,6 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case While(c,b) =>
          insert(sym)
-         /* TODO this should be here only if it is the first block
-         val nextFirstInstruction = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode());
-         val target = new LancetGraphBuilder.Target(nextFirstInstruction, frameState);
-         val result = target.fixed;
-         val tmpState = frameState.copy()
-         appendGoto(result)
-         frameState = tmpState
-         lastInstr = nextFirstInstruction*/
-
          // Loop
          // starting the loop block
          val preLoopEnd = currentGraph.add(new EndNode())
