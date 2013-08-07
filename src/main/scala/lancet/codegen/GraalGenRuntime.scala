@@ -5,9 +5,12 @@ object Math {
 }
 
 object LancetSystem {
-  def arraycopy(a: Any, b: Int, c: Any, d: Int, e: Int) = System.arraycopy(a,b,c,d,e)
+  final def arraycopy(a: Any, b: Int, c: Any, d: Int, e: Int) = System.arraycopy(a,b,c,d,e)
 }
 
+object LancetString {
+  final def valueOf(s: String) = java.lang.String.valueOf(s)
+}
 object Conversions {
   final def l2s(l: Long): String = java.lang.Long.toString(l)
   final def i2s(i: Int): String = java.lang.Integer.toString(i)
