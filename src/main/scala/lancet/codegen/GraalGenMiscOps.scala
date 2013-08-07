@@ -14,7 +14,13 @@ trait GraalGenMiscOps extends GraalNestedCodegen with GraalBuilder {
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case PrintF(f,x) => ???//emitValDef(sym, "printf(" + (f::x.map(quote)).mkString(",") + ")")
+    case Return(x)   => throw GraalBackendException("Not supported by the Graal back-end")
+    case PrintF(f,x) => ssa(sym) {
+      push(Const(Predef))
+      push(Const(f))
+      x foreach { x => pushToString(x) }
+      invoke(Predef.getClass, "printf", (classOf[String] +: (0 until (x.length)) map (x => classOf[Any])):_*)
+    }
     case PrintLn(s)  => ssa(sym) {
       push(Const(Predef))
       pushToString(s)
@@ -26,9 +32,15 @@ trait GraalGenMiscOps extends GraalNestedCodegen with GraalBuilder {
       pushToString(s)
       invoke(Predef.getClass, "print", classOf[Any])
     }
-    case Exit(a)     => ???//emitValDef(sym, "exit(" + quote(a) + ")")
-    case Return(x)   => ???//emitValDef(sym, "return " + quote(x))
-    case Error(s)    => ???//emitValDef(sym, "error(" + quote(s) + ")")
+    case Exit(a)     => ssa(sym) {
+      push(Const(Predef), a)
+      invoke(Predef.getClass, "exit", classOf[Int])
+    }
+    case Error(s)    => ssa(sym) {
+      push(Const(Predef))
+      pushToString(s)
+      invoke(Predef.getClass, "error", classOf[String])
+    }
     case _ => super.emitNode(sym, rhs)
   }
 
