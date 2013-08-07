@@ -469,30 +469,29 @@ trait GraalBuilder { self: GraalGenBase =>
     lastInstr = nextFirstInstruction
   }
 
-  def pushToString(s: Exp[_]) = {
-    tpString(s) match {
-      case  "java.lang.String" =>
-        push(s)
-      case "Int" =>
-        push(Const(Conversions), s)
-        invoke(lancet.codegen.Conversions.getClass, "i2s", classOf[Int])
-      case "Long" =>
-        push(Const(Conversions), s)
-        invoke(lancet.codegen.Conversions.getClass, "l2s", classOf[Long])
-      case "Double" =>
-        push(Const(Conversions), s)
-        invoke(lancet.codegen.Conversions.getClass, "d2s", classOf[Double])
-      case "Float" =>
-        push(Const(Conversions), s)
-        invoke(lancet.codegen.Conversions.getClass, "f2s", classOf[Float])
-      case "Boolean" =>
-        push(Const(Conversions), s)
-        invoke(lancet.codegen.Conversions.getClass, "b2s", classOf[Boolean])
-      case "AnyRef" =>
-        push(s)
-        invoke(s.tp.runtimeClass, "toString")
-    }
-  }
+  def pushToString(exps: Exp[_]*) = exps.foreach { s => tpString(s) match {
+    case  "java.lang.String" =>
+      push(s)
+    case "Int" =>
+      push(Const(Conversions), s)
+      invoke(lancet.codegen.Conversions.getClass, "i2s", classOf[Int])
+    case "Long" =>
+      push(Const(Conversions), s)
+      invoke(lancet.codegen.Conversions.getClass, "l2s", classOf[Long])
+    case "Double" =>
+      push(Const(Conversions), s)
+      invoke(lancet.codegen.Conversions.getClass, "d2s", classOf[Double])
+    case "Float" =>
+      push(Const(Conversions), s)
+      invoke(lancet.codegen.Conversions.getClass, "f2s", classOf[Float])
+    case "Boolean" =>
+      push(Const(Conversions), s)
+      invoke(lancet.codegen.Conversions.getClass, "b2s", classOf[Boolean])
+    case "AnyRef" =>
+      push(s)
+      invoke(s.tp.runtimeClass, "toString")
+  }}
+
 
   def convert(sym: Sym[_], lhs: Exp[_], op: ConvertNode.Op) = {
     insert(sym)
