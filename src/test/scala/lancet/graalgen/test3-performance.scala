@@ -184,10 +184,10 @@ trait NearestCluster extends DSL {
                  unit(false)
                } else unit(true) // TODO elsless if
              } else unit(true)
-             if(cond) {min_d = dist; min_j = j} else unit(()) // TODO ImplicitConvert
+             if(cond) {min_d = dist; min_j = j} else unit(())
              j = j + 1
            }
-           v(i) = min_j // TODO ImplicitConvert and this breaks the value node
+           v(i) = min_j
            i = i + 1
          }
   }
