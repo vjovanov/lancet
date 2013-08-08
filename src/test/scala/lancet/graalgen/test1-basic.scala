@@ -42,7 +42,7 @@ trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPr
 trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with UncheckedOpsExp
   { self =>
   def params(i: Int, b: Int, c: Int) = ???
-
+  val start = System.currentTimeMillis
   val codegen = new GEN_Graal_LMS with GraalGenPrimitiveOps with GraalGenIfThenElse
     with GraalGenOrderingOps with GraalGenVariables with GraalGenWhile with GraalGenArrayOps
     with GraalGenEqual with GraalGenStringOps with GraalGenIOOps with GraalGenMiscOps
@@ -144,6 +144,7 @@ trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with
     emit(scala.List(input), block, method)
   }
   val function = codegen.compile(codegen.f)
+  Predef.println("Code generation time t = " + (System.currentTimeMillis - start))
 }
 
 

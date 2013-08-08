@@ -137,7 +137,8 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       // new DeadCodeEliminationPhase().apply(graph)
       // Debug.dump(graph, "Constructed DCE")
       // Building how the graph should look like
-      printGraph("Before compilation:")
+      printGraph("---- Before Compilation ----")
+      val start = System.currentTimeMillis()
       var res = GraalCompiler.compileGraph(
         graph,
         CodeUtil.getCallingConvention(runtime, CallingConvention.Type.JavaCallee, method, false),
@@ -154,6 +155,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
         new CompilationResult()
       )
       assert(res != null);
+      Predef.println("Jit compilation time t = " + (System.currentTimeMillis - start)+ "ms")
 
       res
     }
@@ -379,6 +381,7 @@ trait GraalBuilder { self: GraalGenBase =>
     case _ if e.tp.erasure == classOf[Variable[Any]] => e.tp.typeArguments.head.toString
     case _ => e.tp.toString
   }
+
   def kind(e: Exp[Any]): Kind = kind(tpString(e))
 
   def kind(e: String): Kind = e match {
@@ -391,9 +394,10 @@ trait GraalBuilder { self: GraalGenBase =>
     case "Float"  => Kind.Float
     case "Double" => Kind.Double
     case "Unit"   => Kind.Void
-    case _        => Kind.Object;
+    case _        => Kind.Object
   }
 
+  // TODO choice between a list and a def
   def operation(sym: Sym[_])(node: Seq[ValueNode] => ValueNode): Unit = {
     insert(sym)
     val operands = rsyms(findDefinition(sym).get.rhs)(x => x.asInstanceOf[Exp[_]] :: Nil).toSeq.reverse
@@ -416,8 +420,12 @@ trait GraalBuilder { self: GraalGenBase =>
       frameState.dpush(ConstantNode.forConstant(Constant.forDouble(v), runtime, graph))
     case Const(v: Boolean) =>
       frameState.ipush(ConstantNode.forConstant(Constant.forBoolean(v), runtime, graph))
+    case Const(v: Unit) =>
+      frameState.apush(ConstantNode.forConstant(Constant.forObject(()), runtime, graph))
     case Const(v: AnyRef) =>
       frameState.apush(ConstantNode.forConstant(Constant.forObject(v), runtime, graph))
+    case sym@Sym(v) if sym.tp.toString == "Unit" => // TODO comment
+      frameState.apush(ConstantNode.forConstant(Constant.forObject(()), runtime, graph))
     case sym@Sym(v) =>
       val loc = frameState.loadLocal(lookup(sym))
       frameState.push(kind(sym), loc)
@@ -442,6 +450,7 @@ trait GraalBuilder { self: GraalGenBase =>
       localsSize += 1
   }
 
+  // TODO see if this is dead code
   def clearLocals(fs: FrameStateBuilder)(locals: Int*) = {
     val removeLocals = new BitSet()
     locals.foreach(removeLocals.set(_))
@@ -503,7 +512,6 @@ trait GraalBuilder { self: GraalGenBase =>
   def ssa(sym: Sym[_])(block: =>Unit) = {
     insert(sym)
     block
-    // TODO check with Tiark
     if (tpString(sym) != "Unit") storeLocal(kind(sym), lookup(sym))
   }
 }

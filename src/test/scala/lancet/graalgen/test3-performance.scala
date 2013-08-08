@@ -247,8 +247,6 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
 
               val oldmu = NewArray[Double](mu_row * mu_col)
 
-              // System.out.println("Kmeans starting Computation")
-              // long now = System.currentTimeMillis()
               var diff = tol + 1.0D
               val c = NewArray[Int](x_row)
               var iter = 0
@@ -275,7 +273,7 @@ class TestPerformance extends FileDiffSuite with GraalGenBase {
         val f = (new Prog with KMeansImpl).function
 
         withOutFileChecked(prefix+"-kmeans-out") {
-          println(f(Array.tabulate(1001)(i => scala.math.pow(0.963789D, i) + .23123D * i), 3, Array.tabulate(9)(i => i * 2.123123D), 3).mkString("centers[",",", "]"))
+          println(f(Array.tabulate(9999)(i => scala.math.pow(0.963789D, i) + .23123D * i), 3, Array.tabulate(99)(i => i * 2.123123D), 3).mkString("centers[",",", "]"))
         }
       }
     }

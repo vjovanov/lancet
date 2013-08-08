@@ -37,7 +37,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-functionality"
 
-/*  def testPrinting = withOutFile(prefix+"-print") {
+  def testPrinting = withOutFile(prefix+"-print") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
@@ -63,9 +63,9 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-print-out"){
       f(1)
     }
-  }*/
+  }
 
-  def testStrings = withOutFile(prefix+"-strings") {
+  /*def testStrings = withOutFile(prefix+"-strings") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val s: Rep[String] = " " + v
@@ -77,7 +77,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
         // println(s.toFloat)
         // println(s.toInt)
         // println(s.trim)
-        s.trim.toInt
+        v
       }
     }
 
@@ -85,10 +85,10 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-strings-out"){
       f(1111)
     }
-  }
+  }*/
 
 
-  /*def testArithmetics = withOutFile(prefix+"-arithmetics") {
+  def testArithmetics = withOutFile(prefix+"-arithmetics") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
@@ -260,6 +260,6 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-while-out") {
       println(f(10))
     }
-  }*/
+  }
 
 }
