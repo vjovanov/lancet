@@ -368,6 +368,34 @@ trait GraalGenBase extends BlockTraversal {
 
 }
 
+trait GraalBuilderNested extends GraalBuilder { self: GraalNestedCodegen =>
+  val IR: Expressions with Effects
+  import IR._
+  import graphBuilder._
+
+  def while_g(condition: Block[Boolean], body: Block[Unit]): Unit = {
+    while_g({
+      emitBlock(condition)
+      push(condition.res)
+    },
+      emitBlock(body)
+    )
+  }
+
+  def if_g[T](c: Exp[Boolean], thenBlock: Block[T], elseBlock: Block[T]): Unit = {
+    push(c, Const(0))
+
+    if_g(Condition.EQ, {
+      emitBlock(elseBlock)
+      push(elseBlock.res)
+    }, {
+      emitBlock(thenBlock)
+      push(thenBlock.res)
+    })
+  }
+
+}
+
 trait GraalBuilder { self: GraalGenBase =>
   import IR._
   import graphBuilder._
@@ -432,21 +460,18 @@ trait GraalBuilder { self: GraalGenBase =>
   }
 
   def lookup(s: Sym[Any]): Int = {
-    assert(localsPos.contains(s), s"Symbol ($s) must have a stack position allocated before its usage. Use function insert(s: Sym[Any]).")
+    require(localsPos.contains(s), s"Symbol ($s) must have a stack position allocated before its usage. Use function insert(s: Sym[Any]).")
     localsPos(s)
   }
 
-  def insert(s: Sym[Any], pos: Sym[Any]): Unit =
-    if(!localsPos.contains(s)) {
-      localsPos += (s -> lookup(pos))
-    }
+  def insert(s: Sym[Any], pos: Sym[Any]): Unit = if(!localsPos.contains(s)) localsPos += (s -> lookup(pos))
 
   def insert(s: Sym[Any]): Unit = tpString(s) match {
     case "Double" | "Long" =>
-      localsPos += (s -> localsSize)
+      localsPos  += (s -> localsSize)
       localsSize += 2
     case _ =>
-      localsPos += (s -> localsSize)
+      localsPos  += (s -> localsSize)
       localsSize += 1
   }
 
@@ -501,6 +526,11 @@ trait GraalBuilder { self: GraalGenBase =>
       invoke(s.tp.runtimeClass, "toString")
   }}
 
+  def ssa(sym: Sym[_])(block: =>Unit) = {
+    insert(sym)
+    block
+    if (tpString(sym) != "Unit") storeLocal(kind(sym), lookup(sym))
+  }
 
   def convert(sym: Sym[_], lhs: Exp[_], op: ConvertNode.Op) = {
     insert(sym)
@@ -509,14 +539,104 @@ trait GraalBuilder { self: GraalGenBase =>
     storeLocal(kind(sym), lookup(sym))
   }
 
-  def ssa(sym: Sym[_])(block: =>Unit) = {
-    insert(sym)
-    block
-    if (tpString(sym) != "Unit") storeLocal(kind(sym), lookup(sym))
+  /**
+   * To use this impure method push two ints in the fifo order to the frameState.
+   */
+  def if_g(c: Condition, thenBlock: => Unit, elseBlock: => Unit): Unit = {
+    val (rhs, lhs) = (frameState.pop(Kind.Int), frameState.pop(Kind.Int))
+    val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(lhs, c, rhs, null)
+    lastInstr = thn
+    frameState = frameStateThen
+
+    // [then] (NOTE: That is how scala and java do it. Yes else goes into the then block.)
+    thenBlock
+    // [then]
+
+    var exitState = frameState.copy()
+    val target = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
+    appendGoto({ // inlined create target
+     val result = new LancetGraphBuilder.Target(target, frameState);
+     result.fixed
+    })
+
+    lastInstr = els
+    frameState = frameStateElse
+
+    // [else] (NOTE: That is how scala and java do it. Yes else goes into the then block.)
+    elseBlock
+    // [else]
+
+    // The EndNode for the already existing edge.
+    val end = currentGraph.add(new EndNode())
+    // The MergeNode that replaces the placeholder.
+    val mergeNode = currentGraph.add(new MergeNode());
+    appendGoto({ // inlined create target
+      val next = target.next();
+
+      target.setNext(end);
+      mergeNode.addForwardEnd(end);
+      mergeNode.setNext(next);
+
+      // The EndNode for the newly merged edge.
+      val newEnd = currentGraph.add(new EndNode())
+      val target2 = new LancetGraphBuilder.Target(newEnd, frameState);
+      val result = target2.fixed;
+      exitState.merge(mergeNode, target2.state);
+      mergeNode.addForwardEnd(newEnd);
+      result
+    })
+    frameState = exitState
+    lastInstr = mergeNode
+    mergeNode.setStateAfter(frameState.create(0))
+  }
+
+  def while_g(condition: => Unit, whileBody: => Unit): Unit = {
+    val preLoopEnd = currentGraph.add(new EndNode())
+    val loopBegin = currentGraph.add(new LoopBeginNode())
+    lastInstr.setNext(preLoopEnd)
+    // Add the single non-loop predecessor of the loop header.
+    loopBegin.addForwardEnd(preLoopEnd)
+    lastInstr = loopBegin
+
+    // Create phi functions for all local variables and operand stack slots.
+    frameState.insertLoopPhis(loopBegin)
+    loopBegin.setStateAfter(frameState.create(0))
+
+    val loopFristInstr = loopBegin
+    val loopBlockState = frameState.copy()
+
+    frameState = loopBlockState
+    lastInstr = loopBegin
+    frameState.cleanupDeletedPhis();
+
+    condition
+
+    val ((thn, frameStateThen), (els, frameStateElse)) =
+      ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), (loopBegin, loopBlockState));
+
+    // starting the body (else block)
+    frameState = frameStateElse // should the loop block state go here?
+    lastInstr = els
+    frameState.cleanupDeletedPhis();
+
+    whileBody
+
+    appendGoto({
+      val target = new LancetGraphBuilder.Target(currentGraph.add(new LoopEndNode(loopBegin)), frameState)
+      val result = target.fixed
+      loopBlockState.merge(loopBegin, target.state)
+      result
+    })
+
+    // after loop (then block)
+    frameState = frameStateThen
+    lastInstr = thn
   }
 }
 
-trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal with GraalBuilder {
+trait GraalCodegen extends GraalGenBase with GraalBuilder
+
+trait GraalNestedCodegen extends GraalGenBase with NestedBlockTraversal with GraalBuilderNested {
   val IR: Expressions with Effects
   import IR._
 

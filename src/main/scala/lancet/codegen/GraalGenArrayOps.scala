@@ -6,7 +6,7 @@ import scala.reflect.SourceContext
 import com.oracle.graal.api.meta._
 import com.oracle.graal.nodes.calc._
 
-trait GraalGenArrayOps extends GraalNestedCodegen with GraalBuilder {
+trait GraalGenArrayOps extends GraalNestedCodegen {
   val IR: ArrayOpsExp
   import IR._
   import graphBuilder._

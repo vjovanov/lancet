@@ -635,15 +635,9 @@ public class LancetGraphBuilder {
         ValueNode x,
         Condition cond,
         ValueNode y,
-        Boolean elseExists,
         scala.Tuple2<LoopBeginNode, FrameStateBuilder> loop
         ) {
         assert !x.isDeleted() && !y.isDeleted();
-        if (!elseExists) { // in args (createTarget)
-            // appendGoto(createTarget(trueBlock, frameState));
-            throw new RuntimeException("Not done yet");
-            // return;
-        }
         double probability = 0.5;
 
         // the mirroring and negation operations get the condition into canonical form

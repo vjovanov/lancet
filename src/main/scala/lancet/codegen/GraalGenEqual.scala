@@ -7,118 +7,36 @@ import com.oracle.graal.api.meta._
 import com.oracle.graal.nodes._
 import com.oracle.graal.nodes.calc._
 
-trait GraalGenEqual extends GraalNestedCodegen with GraalBuilder {
+trait GraalGenEqual extends GraalNestedCodegen with GraalBuilder with GraalGenBase {
   val IR: EqualExp
   import IR._
   import graphBuilder._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case Equal(a,b) =>
-      insert(sym)
+    case Equal(a,b) => ssa(sym) {
       if(kind(a) == kind(b) && isPrimitiveType(a.tp)) {
-        push(b, a)
-        val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(kind(a)), Condition.EQ, frameState.pop(kind(b)), true, null)
-        // then
-        // here we should have a new lastInstr, and the new frameState
-        lastInstr = thn
-        frameState = frameStateThen
-
-        frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
-        storeLocal(kind(sym), lookup(sym))
-
-        // appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
-        var exitState = frameState.copy()
-        val target = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
-        appendGoto({ // inlined create target
-         val result = new LancetGraphBuilder.Target(target, frameState);
-         result.fixed
+        push(a, b)
+        if_g(Condition.EQ, {
+          frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
+        }, {
+          frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
         })
-
-        // else
-        lastInstr = els
-        frameState = frameStateElse
-
-        frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
-        storeLocal(kind(sym), lookup(sym))
-
-        // The EndNode for the already existing edge.
-        val end = currentGraph.add(new EndNode());
-        // The MergeNode that replaces the placeholder.
-        val mergeNode = currentGraph.add(new MergeNode());
-        appendGoto({ // inlined create target
-          val next = target.next();
-
-          target.setNext(end);
-          mergeNode.addForwardEnd(end);
-          mergeNode.setNext(next);
-
-          // The EndNode for the newly merged edge.
-          val newEnd = currentGraph.add(new EndNode())
-          val target2 = new LancetGraphBuilder.Target(newEnd, frameState);
-          val result = target2.fixed;
-          exitState.merge(mergeNode, target2.state);
-          mergeNode.addForwardEnd(newEnd);
-          result
-        })
-        frameState = exitState
-        lastInstr = mergeNode
-        mergeNode.setStateAfter(frameState.create(0))
       } else {
         ??? // here we need the method invocations
       }
-    case NotEqual(a,b) =>
-      insert(sym)
+    }
+    case NotEqual(a,b) => ssa(sym) {
       if(kind(a) == kind(b) && isPrimitiveType(a.tp)) {
-        push(b, a)
-        val ((thn, frameStateThen), (els, frameStateElse)) = ifNode(frameState.pop(kind(a)), Condition.NE, frameState.pop(kind(b)), true, null)
-        // then
-        // here we should have a new lastInstr, and the new frameState
-        lastInstr = thn
-        frameState = frameStateThen
-
-        frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
-        storeLocal(kind(sym), lookup(sym))
-
-        // appendGoto(createTarget(probability, currentBlock.successors.get(0), frameState));
-        var exitState = frameState.copy()
-        val target = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
-        appendGoto({ // inlined create target
-         val result = new LancetGraphBuilder.Target(target, frameState);
-         result.fixed
+        push(a, b)
+        if_g(Condition.NE, {
+          frameState.ipush(ConstantNode.forConstant(Constant.INT_1, runtime, graph))
+        }, {
+          frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
         })
-
-        // else
-        lastInstr = els
-        frameState = frameStateElse
-
-        frameState.ipush(ConstantNode.forConstant(Constant.INT_0, runtime, graph))
-        storeLocal(kind(sym), lookup(sym))
-
-        // The EndNode for the already existing edge.
-        val end = currentGraph.add(new EndNode());
-        // The MergeNode that replaces the placeholder.
-        val mergeNode = currentGraph.add(new MergeNode());
-        appendGoto({ // inlined create target
-          val next = target.next();
-
-          target.setNext(end);
-          mergeNode.addForwardEnd(end);
-          mergeNode.setNext(next);
-
-          // The EndNode for the newly merged edge.
-          val newEnd = currentGraph.add(new EndNode())
-          val target2 = new LancetGraphBuilder.Target(newEnd, frameState);
-          val result = target2.fixed;
-          exitState.merge(mergeNode, target2.state);
-          mergeNode.addForwardEnd(newEnd);
-          result
-        })
-        frameState = exitState
-        lastInstr = mergeNode
-        mergeNode.setStateAfter(frameState.create(0))
       } else {
         ??? // here we need the method invocations
       }
+    }
     case _ => super.emitNode(sym, rhs)
   }
 }

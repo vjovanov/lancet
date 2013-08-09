@@ -11,56 +11,11 @@ trait GraalGenWhile extends GraalNestedCodegen with GraalBuilder {
   val IR: WhileExp
   import IR._
   import graphBuilder._
+
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case While(c,b) =>
          insert(sym)
-         // Loop
-         // starting the loop block
-         val preLoopEnd = currentGraph.add(new EndNode())
-         val loopBegin = currentGraph.add(new LoopBeginNode())
-         lastInstr.setNext(preLoopEnd)
-         // Add the single non-loop predecessor of the loop header.
-         loopBegin.addForwardEnd(preLoopEnd)
-         lastInstr = loopBegin
-
-         // Create phi functions for all local variables and operand stack slots.
-         frameState.insertLoopPhis(loopBegin)
-         loopBegin.setStateAfter(frameState.create(0))
-
-         val loopFristInstr = loopBegin
-         val loopBlockState = frameState.copy()
-
-         frameState = loopBlockState
-         lastInstr = loopBegin
-         frameState.cleanupDeletedPhis();
-
-         // [begin] condition
-         emitBlock(c)
-         push(c.res)
-         // [end] condition
-
-         val ((thn, frameStateThen), (els, frameStateElse)) =
-           ifNode(frameState.pop(Kind.Int), Condition.EQ, appendConstant(Constant.INT_0), true, (loopBegin, loopBlockState));
-
-         // starting the body (else block)
-         frameState = frameStateElse // should the loop block state go here?
-         lastInstr = els
-         frameState.cleanupDeletedPhis();
-
-         // [begin] body
-         emitBlock(b)
-         // [end] body
-
-         appendGoto({
-           val target = new LancetGraphBuilder.Target(currentGraph.add(new LoopEndNode(loopBegin)), frameState)
-           val result = target.fixed
-           loopBlockState.merge(loopBegin, target.state)
-           result
-         })
-
-         // after loop (then block)
-         frameState = frameStateThen
-         lastInstr = thn
+         while_g(c, b)
     case _ => super.emitNode(sym, rhs)
   }
 }
