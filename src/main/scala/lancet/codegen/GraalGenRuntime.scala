@@ -11,10 +11,3 @@ object LancetSystem {
 object LancetString {
   final def valueOf(s: String) = java.lang.String.valueOf(s)
 }
-object Conversions {
-  final def l2s(l: Long): String = java.lang.Long.toString(l)
-  final def i2s(i: Int): String = java.lang.Integer.toString(i)
-  final def d2s(d: Double): String = java.lang.Double.toString(d)
-  final def f2s(f: Float): String = java.lang.Float.toString(f)
-  final def b2s(b: Boolean): String = java.lang.Boolean.toString(b)
-}

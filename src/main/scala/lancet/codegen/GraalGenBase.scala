@@ -482,11 +482,32 @@ trait GraalBuilder { self: GraalGenBase =>
     fs.clearNonLiveLocals(removeLocals)
   }
 
+  def invokeStatic(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
+    val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
+    val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
+    genInvokeStatic(resolvedMethod)
+
+     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
+
+    // block stuff
+    val nextFirstInstruction = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
+    val target = new LancetGraphBuilder.Target(nextFirstInstruction, frameState)
+    val result = target.fixed
+    val tmpState = frameState.copy()
+    appendGoto(result)
+
+    frameState = tmpState
+    frameState.cleanupDeletedPhis();
+    frameState.setRethrowException(false);
+    lastInstr = nextFirstInstruction
+  }
+
   def invoke(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
     val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
     val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
-    val graalArgs = frameState.popArguments(resolvedMethod.getSignature().getParameterSlots(true),
-     resolvedMethod.getSignature().getParameterCount(true))
+    val graalArgs = frameState.popArguments(
+      resolvedMethod.getSignature().getParameterSlots(true),
+      resolvedMethod.getSignature().getParameterCount(true))
     genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
 
@@ -503,27 +524,22 @@ trait GraalBuilder { self: GraalGenBase =>
     lastInstr = nextFirstInstruction
   }
 
-  def pushToString(exps: Exp[_]*) = exps.foreach { s => tpString(s) match {
-    case  "java.lang.String" =>
-      push(s)
-    case "Int" =>
-      push(Const(Conversions), s)
-      invoke(lancet.codegen.Conversions.getClass, "i2s", classOf[Int])
-    case "Long" =>
-      push(Const(Conversions), s)
-      invoke(lancet.codegen.Conversions.getClass, "l2s", classOf[Long])
-    case "Double" =>
-      push(Const(Conversions), s)
-      invoke(lancet.codegen.Conversions.getClass, "d2s", classOf[Double])
-    case "Float" =>
-      push(Const(Conversions), s)
-      invoke(lancet.codegen.Conversions.getClass, "f2s", classOf[Float])
-    case "Boolean" =>
-      push(Const(Conversions), s)
-      invoke(lancet.codegen.Conversions.getClass, "b2s", classOf[Boolean])
-    case "AnyRef" =>
-      push(s)
-      invoke(s.tp.runtimeClass, "toString")
+  def pushToString(exps: Exp[_]*) = exps.foreach { s =>
+    push(s)
+    tpString(s) match {
+      case  "java.lang.String" =>
+      case "Int" =>
+        invokeStatic(classOf[Integer], "toString", classOf[Int])
+      case "Long" =>
+        invokeStatic(classOf[_root_.java.lang.Long], "toString", classOf[Long])
+      case "Double" =>
+        invokeStatic(classOf[_root_.java.lang.Double], "toString", classOf[Double])
+      case "Float" =>
+        invokeStatic(classOf[_root_.java.lang.Float], "toString", classOf[Float])
+      case "Boolean" =>
+        invokeStatic(classOf[_root_.java.lang.Boolean], "toString", classOf[Boolean])
+      case "AnyRef" =>
+        invoke(s.tp.runtimeClass, "toString")
   }}
 
   def ssa(sym: Sym[_])(block: =>Unit) = {
