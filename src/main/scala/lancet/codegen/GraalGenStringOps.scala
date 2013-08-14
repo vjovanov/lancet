@@ -44,8 +44,8 @@ trait GraalGenStringOps extends GraalNestedCodegen with GraalBuilder {
           invoke(classOf[String], "trim")
         }
         case StringValueOf(a)        => ssa(sym) {
-          push(Const(LancetString), a)
-          invoke(LancetString.getClass, "valueOf", classOf[String])
+          push(a)
+          invoke(classOf[String], "valueOf", classOf[String])
         }
         case StringToDouble(s)       => ssa(sym) {
           push(Const(Predef), s)

@@ -39,6 +39,7 @@ libraryDependencies += "stanford-ppl" %% "optiml" % "0.1-SNAPSHOT"
 
 libraryDependencies += "com.google.protobuf" % "protobuf-java" % "2.4.1"
 
+libraryDependencies += "asm" % "asm" % "3.3.1"
 
 libraryDependencies += "junit" % "junit" % "4.8.1" % "test"
 
