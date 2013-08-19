@@ -40,21 +40,21 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
   def testPrinting = withOutFile(prefix+"-print") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
-        // val i: Rep[Int] = v
-        // val l: Rep[Long] = v.toLong
-   //     val f: Rep[Float] = v.toFloat
-   //     val d: Rep[Double] = v.toDouble
-   //     val x = "a" + "b"
-   //     println(x)
-        // println(i)
-   //     println("Int Value = " + i)
-       // println(l)
-       // println("Long Value = " + l)
-   //     println(f)
-   //     println("Long Value = " + f)
-   //     println(d)
-   //     println("Double Value = " + d)
-   //     println("Boolean Value = " + "abcd".startsWith("ab"))
+        val i: Rep[Int] = v
+        val l: Rep[Long] = v.toLong
+        val f: Rep[Float] = v.toFloat
+        val d: Rep[Double] = v.toDouble
+        val x = "a" + "b"
+        println(x)
+        println(i)
+        println("Int Value = " + i)
+        println(l)
+        println("Long Value = " + l)
+        println(f)
+        println("Long Value = " + f)
+        println(d)
+        println("Double Value = " + d)
+        println("Boolean Value = " + "abcd".startsWith("ab"))
         v
       }
     }
@@ -118,9 +118,9 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-arithmetics-out"){
       f(1)
     }
-  }*/
+  }
 
-  /*def testConditions = withOutFile(prefix + "-conditions") {
+  def testConditions = withOutFile(prefix + "-conditions") {
     trait Prog extends DSL {
 
       def main(v: Rep[Int]): Rep[Int] = {

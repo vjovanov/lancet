@@ -29,6 +29,8 @@ import scala.reflect.RefinedManifest
 import scala.collection.mutable.{HashMap => MHashMap, Map => MMap, ArrayBuffer}
 import scala.virtualization.lms.internal._
 import lancet.core._
+import scala.tools.nsc.io._
+import scala.tools.nsc.interpreter.AbstractFileClassLoader
 
 import java.util.concurrent.Callable
 import java.util.BitSet
@@ -66,14 +68,35 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
   import graphBuilder._
 
   var debugDepGraph = true
-
+  var cls: Class[_] = _
+  var method: ResolvedJavaMethod = _
   /**
    * @param args List of symbols bound to `body`
    * @param body Block to emit
    * @param className Name of the generated identifier
    * @param stream Output stream
    */
-  def emit[A : Manifest](args: List[Sym[_]], body: Block[A], method: ResolvedJavaMethod): List[(Sym[Any], Any)] = {
+  def emit[A : Manifest](args: List[Sym[_]], body: Block[A]): List[(Sym[Any], Any)] = {
+    val className = "f" + new scala.util.Random().nextInt
+    val fTemplate = new FunctionTemplate(className,
+      args.map(_.tp),
+      manifest[A],
+      600,
+      600
+    )
+    val classBytes = fTemplate.bytecode
+    val vfs = new VirtualDirectory("<vfs>", None)
+    val file = vfs.fileNamed(className + ".class")
+    val bout = file.bufferedOutput
+    bout.write(classBytes, 0, classBytes.length)
+    bout.flush
+    bout.close()
+    val loader = new AbstractFileClassLoader(vfs, this.getClass.getClassLoader)
+    cls = loader.loadClass(className)
+
+    val reflectMeth = cls.getDeclaredMethod("apply", args.map(_.tp.runtimeClass):_*)
+    method = runtime.lookupJavaMethod(reflectMeth)
+
     if (debugDepGraph) {
       println("dumping graph to: "+this.getClass.getName)
       exportGraph(this.getClass.getName + "-lms")(body.res)
@@ -119,10 +142,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
   val target = HotSpotGraalRuntime.graalRuntime().getTarget();
   val cache = HotSpotGraalRuntime.graalRuntime().getCache();
 
-  // T must be a function
-  def compile0(c: Class[_], reflectMeth: Method): InstalledCode = {
-    val method = runtime.lookupJavaMethod(reflectMeth)
-
+  def compile0(c: Class[_]): InstalledCode = {
     val plan = new PhasePlan()
     plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
     plan.addPhase(PhasePosition.AFTER_PARSING, printGraphPhase("AFTER_PARSING"))
@@ -134,9 +154,6 @@ trait GraalCompile { self: GEN_Graal_LMS =>
       println("Method " + method)
 
       Debug.dump(graph, "Constructed")
-      // new DeadCodeEliminationPhase().apply(graph)
-      // Debug.dump(graph, "Constructed DCE")
-      // Building how the graph should look like
       printGraph("---- Before Compilation ----")
       val start = System.currentTimeMillis()
       var res = GraalCompiler.compileGraph(
@@ -165,13 +182,12 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     resMethod
   }
 
-  def compile[A, B](f: A => B): A => B = {
-    val cls = f.getClass
-    val reflectMeth = cls.getDeclaredMethod("apply$mcII$sp", classOf[Int])
-    val compiledMethod = compile0(cls, reflectMeth)
+  def compile[A: Manifest, B: Manifest]: A => B = {
+
+    val compiledMethod = compile0(cls)
 
     { (x:A) =>
-      val y = compiledMethod.executeVarargs(f, x.asInstanceOf[AnyRef])
+      val y = compiledMethod.executeVarargs(().asInstanceOf[AnyRef], x.asInstanceOf[AnyRef])
       y.asInstanceOf[B]
     }
   }
@@ -291,7 +307,6 @@ trait GraalGenBase extends BlockTraversal {
     throw new GenerationFailedException("don't know how to generate code for: " + rhs)
   }
 
-  /* until the api stabilizes
   def emit[T : Manifest, R : Manifest](f: Exp[T] => Exp[R]): List[(Sym[Any], Any)] = {
     val s = fresh[T]
     val body = reifyBlock(f(s))
@@ -330,7 +345,7 @@ trait GraalGenBase extends BlockTraversal {
     val s5 = fresh[T5]
     val body = reifyBlock(f(s1, s2, s3, s4, s5))
     emit(List(s1, s2, s3, s4, s5), body)
-  }*/
+  }
 
   /**
    * @param args List of symbols bound to `body`
@@ -338,7 +353,7 @@ trait GraalGenBase extends BlockTraversal {
    * @param className Name of the generated identifier
    * @param stream Output stream
    */
-  def emit[A : Manifest](args: List[Sym[_]], body: Block[A], method: ResolvedJavaMethod): List[(Sym[Any], Any)]
+  def emit[A : Manifest](args: List[Sym[_]], body: Block[A]): List[(Sym[Any], Any)]
 
   // ----------
 

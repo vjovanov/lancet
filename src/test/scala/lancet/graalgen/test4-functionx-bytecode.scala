@@ -33,18 +33,54 @@ import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
 import scala.virtualization.lms.common._
 import scala.virtualization.lms.util.OverloadHack
 
+import scala.tools.nsc.io._
+import scala.tools.nsc.interpreter.AbstractFileClassLoader
+
 class TestBytecodeTemplates extends FileDiffSuite with GraalGenBase {
 
   val prefix = "test-out/test-graalgen-functionx"
 
-  def testFunction = withOutFile(prefix+"-print") {
-    val f3 = new FunctionTemplate("f3", List(manifest[Int], manifest[Double], manifest[Long]), manifest[Boolean])
-    val classBytes = f3.bytecode
-    getClass.getClassLoader.defineClass("f3", classBytes, 0, classBytes.length)
-    val cls: Class[_] = getClass.getClassLoader.loadClass("f3")
+  def testFunction3 = withOutFile(prefix+"-f3") {
+    val f3Template = new FunctionTemplate("f3",
+      List(manifest[Int], manifest[Double], manifest[Long]),
+      manifest[Boolean],
+      600,
+      600
+    )
+    val classBytes = f3Template.bytecode
+    val vfs = new VirtualDirectory("<vfs>", None)
+    val file = vfs.fileNamed("f3.class")
+    val bout = file.bufferedOutput
+    bout.write(classBytes, 0, classBytes.length)
+    bout.flush
+    bout.close()
+    val loader = new AbstractFileClassLoader(vfs, this.getClass.getClassLoader)
+    val cls: Class[_] = loader.loadClass("f3")
     val cons = cls.getConstructor()
     val f3 = cons.newInstance().asInstanceOf[(Int, Double, Long)=>Boolean]
     println(f3(1, 1.0D, 1L))
   }
-  
+
+
+  def testFunction8 = withOutFile(prefix+"-f8") {
+    val f8Template = new FunctionTemplate("f8",
+      List(manifest[Char], manifest[Short], manifest[Int], manifest[Long], manifest[Float], manifest[Double], manifest[Boolean], manifest[Array[Any]]),
+      manifest[Boolean],
+      600,
+      600
+    )
+    val classBytes = f8Template.bytecode
+    val vfs = new VirtualDirectory("<vfs>", None)
+    val file = vfs.fileNamed("f8.class")
+    val bout = file.bufferedOutput
+    bout.write(classBytes, 0, classBytes.length)
+    bout.flush
+    bout.close()
+    val loader = new AbstractFileClassLoader(vfs, this.getClass.getClassLoader)
+    val cls: Class[_] = loader.loadClass("f8")
+    val cons = cls.getConstructor()
+    val f8 = cons.newInstance().asInstanceOf[(Char, Short, Int, Long, Float, Double, Boolean, Array[Any])=>Boolean]
+    println(f8('a', 1, 1, 1L, 1.0F, 1.0D, true, Array[Any](1)))
+  }
+
 }
