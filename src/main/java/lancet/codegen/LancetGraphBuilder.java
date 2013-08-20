@@ -496,7 +496,7 @@ public class LancetGraphBuilder {
         ValueNode y = frameState.pop(result);
         ValueNode x = frameState.pop(result);
         boolean isStrictFP = isStrict(method.getModifiers());
-        ArithmeticNode v;
+        BinaryNode v;
         switch (opcode) {
             case IADD:
             case LADD:
@@ -935,7 +935,7 @@ public class LancetGraphBuilder {
     }
 
     public void emitNullCheck(ValueNode receiver) {
-        if (receiver.stamp().nonNull()) {
+        if (ObjectStamp.isObjectNonNull(receiver.stamp())) {
             return;
         }
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
@@ -1124,8 +1124,11 @@ public class LancetGraphBuilder {
         }
         // 1. check if the exact type of the receiver can be determined
         ResolvedJavaType exact = klass.asExactType();
-        if (exact == null && receiver.objectStamp().isExactType()) {
-            exact = receiver.objectStamp().type();
+        if (exact == null && receiver.stamp() instanceof ObjectStamp) {
+            ObjectStamp receiverStamp = (ObjectStamp) receiver.stamp();
+            if (receiverStamp.isExactType()) {
+              exact = receiverStamp.type();
+            }
         }
         if (exact != null) {
             // either the holder class is exact, or the receiver object has an exact type
