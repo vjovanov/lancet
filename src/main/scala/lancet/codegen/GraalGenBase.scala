@@ -146,7 +146,6 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     val plan = new PhasePlan()
     plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
     plan.addPhase(PhasePosition.AFTER_PARSING, printGraphPhase("AFTER_PARSING"))
-    plan.addPhase(PhasePosition.HIGH_LEVEL, printGraphPhase("HIGH_LEVEL"))
 
     val result = topScope(method) {
       println("To debug use:")

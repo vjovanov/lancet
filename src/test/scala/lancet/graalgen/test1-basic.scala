@@ -32,7 +32,39 @@ import com.oracle.graal.api.meta._      // ResolvedJavaMethod
 import com.oracle.graal.hotspot._
 import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
 import scala.virtualization.lms.common._
+import scala.virtualization.lms.internal._
 import scala.virtualization.lms.util.OverloadHack
+import scala.reflect.SourceContext
+
+trait DynamicScopes extends Expressions with scala.virtualization.lms.common.BaseExp {
+  trait DynamicScope
+  lazy val scopes = new scala.collection.mutable.HashMap[DynamicScope, Int]()
+  lazy val symbolScopes = scala.collection.mutable.HashMap[Exp[Any], Set[DynamicScope]]()
+
+  // maybe find or create definition
+    override implicit def toAtom[A:Manifest](d: Def[A])(implicit pos: SourceContext): Exp[A] = {
+    val res = super.toAtom(d)
+    symbolScopes += (res -> scopes.keySet.toSet)
+    res
+  }
+
+  def const[T: Manifest](c: T) = { // need to refactor whole LMS
+    val res = Const(c)
+    symbolScopes += (res -> scopes.keySet.toSet)
+    res
+  }
+
+  // what about consts
+  def dynamicScope[T](d: DynamicScope)(b: => Rep[T]): Rep[T] = {
+    scopes(d) = if (scopes.contains(d)) scopes(d) + 1 else 1
+    val res = b
+    if(scopes(d) == 1) scopes.remove(d) else scopes(d) = scopes(d) - 1
+    res
+  }
+
+  // TODO: this shold be gone with the LMS refactoring
+  protected override def unit[T:Manifest](x: T) = const(x)
+}
 
 trait DSL extends ScalaOpsPkg with TupledFunctions with UncheckedOps with LiftPrimitives with LiftString with LiftVariables
 {
