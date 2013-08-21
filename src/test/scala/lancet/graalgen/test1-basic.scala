@@ -83,7 +83,7 @@ trait Impl extends DSL with ScalaOpsPkgExp with TupledFunctionsRecursiveExp with
     emit(main)
   }
   val function = codegen.compile[Int, Int]
-  Predef.println("Code generation time t = " + (System.currentTimeMillis - start))
+  Predef.println(s"Code generation time t =  ${System.currentTimeMillis - start} ms")
 }
 
 

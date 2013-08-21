@@ -35,6 +35,7 @@ import scala.tools.nsc.interpreter.AbstractFileClassLoader
 import java.util.concurrent.Callable
 import java.util.BitSet
 import java.lang.reflect.Method
+import java.util.concurrent.atomic.AtomicLong
 
 import com.oracle.graal.java._
 import com.oracle.graal.phases._   // PhasePlan
@@ -50,6 +51,7 @@ import com.oracle.graal.api.code._      // Assumptions
 import com.oracle.graal.hotspot._
 import com.oracle.graal.hotspot.meta._  // HotSpotRuntime
 import com.oracle.graal.compiler._      // GraalCompiler
+import com.oracle.graal.compiler.phases._      // GraalCompiler
 import com.oracle.graal.graph._
 import com.oracle.graal.nodes.{java=>J,_}   // StructuredGraph
 import com.oracle.graal.nodes.java._        // MethodCallTargetNode
@@ -62,6 +64,11 @@ import com.oracle.graal.nodes.calc._
 import com.oracle.graal.api.runtime._
 import com.oracle.graal.nodes.spi._
 
+
+object GEN_Graal_LMS {
+  val classCounter = new AtomicLong(0L)
+}
+
 trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGraph { self: GraalBuilder =>
   val IR: Expressions with Effects
   import IR._
@@ -70,30 +77,15 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
   var debugDepGraph = true
   var cls: Class[_] = _
   var method: ResolvedJavaMethod = _
+
   /**
    * @param args List of symbols bound to `body`
    * @param body Block to emit
    * @param className Name of the generated identifier
    * @param stream Output stream
    */
-  def emit[A : Manifest](args: List[Sym[_]], body: Block[A]): List[(Sym[Any], Any)] = {
-    val className = "f" + new scala.util.Random().nextInt
-    val fTemplate = new FunctionTemplate(className,
-      args.map(_.tp),
-      manifest[A],
-      600,
-      600
-    )
-    val classBytes = fTemplate.bytecode
-    val vfs = new VirtualDirectory("<vfs>", None)
-    val file = vfs.fileNamed(className + ".class")
-    val bout = file.bufferedOutput
-    bout.write(classBytes, 0, classBytes.length)
-    bout.flush
-    bout.close()
-    val loader = new AbstractFileClassLoader(vfs, this.getClass.getClassLoader)
-    cls = loader.loadClass(className)
-
+  def emit[A : Manifest](args: List[Sym[_]], body: Block[A], className: String = genClassName()): List[(Sym[Any], Any)] = {
+    cls = generateAndLoadFunction(className, args.map(_.tp), manifest[A])
     val reflectMeth = cls.getDeclaredMethod("apply", args.map(_.tp.runtimeClass):_*)
     method = runtime.lookupJavaMethod(reflectMeth)
 
@@ -144,7 +136,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
 
   def compile0(c: Class[_]): InstalledCode = {
     val plan = new PhasePlan()
-    plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.ALL))
+    plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE))
     plan.addPhase(PhasePosition.AFTER_PARSING, printGraphPhase("AFTER_PARSING"))
 
     val result = topScope(method) {
@@ -154,6 +146,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
 
       Debug.dump(graph, "Constructed")
       printGraph("---- Before Compilation ----")
+      HighTier.Inline.setValue(false)
       val start = System.currentTimeMillis()
       var res = GraalCompiler.compileGraph(
         graph,
@@ -165,11 +158,15 @@ trait GraalCompile { self: GEN_Graal_LMS =>
         target,
         cache,
         plan,
-        OptimisticOptimizations.ALL,
+        OptimisticOptimizations.NONE,
         new SpeculationLog(),
         Suites.createDefaultSuites(),
         new CompilationResult()
       )
+
+      if (true) {
+        printGraph("Final")
+      }
       assert(res != null);
       Predef.println("Jit compilation time t = " + (System.currentTimeMillis - start)+ "ms")
 
@@ -201,7 +198,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        Meter.getValue(),
        Time.getValue(),
        Dump.getValue(),
-       "Impl$$anon$5$$anonfun$1.apply$mcII$sp",// MethodFilter.getValue()
+       "graal_1.apply",// MethodFilter.getValue()
        System.out,
        List(new GraphPrinterDumpHandler())
       )
@@ -294,6 +291,28 @@ trait GraalGenBase extends BlockTraversal {
 
   // ----------
 
+  def genClassName() = "graal_" + GEN_Graal_LMS.classCounter.incrementAndGet
+
+  def generateAndLoadFunction(className: String, args: List[Manifest[_]], resTp: Manifest[_]): Class[_] = {
+    val fTemplate = new FunctionTemplate(className,
+      args,
+      resTp,
+      200,
+      10
+    )
+    val classBytes = fTemplate.bytecode
+    val vfs = new VirtualDirectory("<vfs>", None)
+    val file = vfs.fileNamed(className + ".class")
+    val bout = file.bufferedOutput
+    bout.write(classBytes, 0, classBytes.length)
+    bout.flush
+    bout.close()
+    val loader = new AbstractFileClassLoader(vfs, this.getClass.getClassLoader)
+    loader.loadClass(className)
+  }
+
+  // ----------
+
   override def traverseStm(stm: Stm) = stm match {
     case TP(sym, rhs) =>
       emitNode(sym,rhs)
@@ -352,7 +371,7 @@ trait GraalGenBase extends BlockTraversal {
    * @param className Name of the generated identifier
    * @param stream Output stream
    */
-  def emit[A : Manifest](args: List[Sym[_]], body: Block[A]): List[(Sym[Any], Any)]
+  def emit[A : Manifest](args: List[Sym[_]], body: Block[A], className: String = genClassName()): List[(Sym[Any], Any)]
 
   // ----------
 

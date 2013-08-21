@@ -84,7 +84,6 @@ class FunctionTemplate(
         .map{case (x, y) => (x, y+1)}
         .foreach { case (x, y) =>
           mv.visitVarInsn(Opcodes.ALOAD, y)
-          println("a: " + shortType(x))
           if (shortType(x).startsWith("[")) {
             mv.visitTypeInsn(Opcodes.CHECKCAST, shortType(x));
           } else if(x != "O") {
