@@ -45,7 +45,8 @@ class TestBytecodeTemplates extends FileDiffSuite with GraalGenBase {
       List(manifest[Int], manifest[Double], manifest[Long]),
       manifest[Boolean],
       600,
-      600
+      600,
+      Nil
     )
     val classBytes = f3Template.bytecode
     val vfs = new VirtualDirectory("<vfs>", None)
@@ -61,13 +62,13 @@ class TestBytecodeTemplates extends FileDiffSuite with GraalGenBase {
     println(f3(1, 1.0D, 1L))
   }
 
-
   def testFunction8 = withOutFile(prefix+"-f8") {
     val f8Template = new FunctionTemplate("f8",
       List(manifest[Char], manifest[Short], manifest[Int], manifest[Long], manifest[Float], manifest[Double], manifest[Boolean], manifest[Array[Any]]),
       manifest[Boolean],
       600,
-      600
+      600,
+      Nil
     )
     val classBytes = f8Template.bytecode
     val vfs = new VirtualDirectory("<vfs>", None)
@@ -83,4 +84,25 @@ class TestBytecodeTemplates extends FileDiffSuite with GraalGenBase {
     println(f8('a', 1, 1, 1L, 1.0F, 1.0D, true, Array[Any](1)))
   }
 
+    def testStubs = withOutFile(prefix+"-stub") {
+      val f3Template = new FunctionTemplate("f3",
+        List(manifest[Int], manifest[Double], manifest[Long]),
+        manifest[Boolean],
+        600,
+        600,
+        List(("scala/Predef$", "println", manifest[AnyRef] :: Nil, manifest[Unit]))
+      )
+      val classBytes = f3Template.bytecode
+      // positions
+      val vfs = new VirtualDirectory("<vfs>", None)
+      val file = vfs.fileNamed("f3.class")
+      val bout = file.bufferedOutput
+      bout.write(classBytes, 0, classBytes.length)
+      bout.flush
+      bout.close()
+      val loader = new AbstractFileClassLoader(vfs, this.getClass.getClassLoader)
+      val cls: Class[_] = loader.loadClass("f3")
+      val cons = cls.getConstructor()
+      val f3 = cons.newInstance().asInstanceOf[(Int, Double, Long)=>Boolean]
+  }
 }

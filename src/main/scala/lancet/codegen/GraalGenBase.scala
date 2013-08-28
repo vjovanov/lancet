@@ -298,7 +298,8 @@ trait GraalGenBase extends BlockTraversal {
       args,
       resTp,
       200,
-      10
+      10,
+      Nil
     )
     val classBytes = fTemplate.bytecode
     val vfs = new VirtualDirectory("<vfs>", None)
