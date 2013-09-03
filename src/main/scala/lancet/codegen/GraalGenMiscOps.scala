@@ -19,18 +19,18 @@ trait GraalGenMiscOps extends GraalNestedCodegen with GraalBuilder {
       push(Const(Predef))
       push(Const(f))
       x foreach { x => pushToString(x) }
-      invoke(Predef.getClass, "printf", (classOf[String] +: (0 until (x.length)) map (x => classOf[Any])):_*)
+      invoke(Predef.getClass, "printf", classOf[Unit], (classOf[String] +: (0 until (x.length)) map (x => classOf[Any])):_*)
     }
     case PrintLn(s)  => ssa(sym) {
       push(Const(Predef))
       pushToString(s)
-      invoke(Predef.getClass, "println", classOf[Any])
+      invoke(Predef.getClass, "println", classOf[Unit], classOf[Any])
     }
     case Print(s)    => ssa(sym) {
       insert(sym)
       push(Const(Predef))
       pushToString(s)
-      invoke(Predef.getClass, "print", classOf[Any])
+      invoke(Predef.getClass, "print", classOf[Unit], classOf[Any])
     }
     case Exit(a)     => ssa(sym) {
       push(Const(Predef), a)

@@ -1,10 +1,7 @@
 ab
-1
-Int Value = 1
-1
-Long Value = 1
-1.0
-Long Value = 1.0
-1.0
-Double Value = 1.0
-Boolean Value = true
+2
+3
+4.0
+Int = 1
+Float = 1.0
+Double = 1.0

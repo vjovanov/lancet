@@ -35,6 +35,7 @@ import scala.virtualization.lms.util.OverloadHack
 
 import scala.tools.nsc.io._
 import scala.tools.nsc.interpreter.AbstractFileClassLoader
+import org.objectweb.asm.Opcodes
 
 class TestBytecodeTemplates extends FileDiffSuite with GraalGenBase {
 
@@ -90,7 +91,7 @@ class TestBytecodeTemplates extends FileDiffSuite with GraalGenBase {
         manifest[Boolean],
         600,
         600,
-        List(("scala/Predef$", "println", manifest[AnyRef] :: Nil, manifest[Unit]))
+        List(JVMMethodCall(Opcodes.INVOKEVIRTUAL, "scala/Predef$", "println", classOf[AnyRef] :: Nil, classOf[Unit]))
       )
       val classBytes = f3Template.bytecode
       // positions

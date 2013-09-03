@@ -41,9 +41,8 @@ trait GraalGenArrayOps extends GraalNestedCodegen {
     case ArrayForeach(a,x,block) =>
     case ArrayCopy(src,srcPos,dest,destPos,len) =>
       insert(sym)
-      push(Const(LancetSystem))
       push(src,srcPos,dest,destPos,len)
-      invoke(LancetSystem.getClass, "arraycopy", classOf[Any], classOf[Int], classOf[Any], classOf[Int], classOf[Int] )
+      invokeStatic(classOf[_root_.java.lang.System], "arraycopy", classOf[Unit], classOf[Any], classOf[Int], classOf[Any], classOf[Int], classOf[Int] )
     case a@ArraySort(x) =>
     case n@ArrayMap(a,x,blk) =>
     case ArrayToSeq(a) =>

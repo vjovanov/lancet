@@ -30,11 +30,10 @@ trait GraalGenMathOps extends GraalNestedCodegen with GraalBuilder {
     case MathTanh(x)    => ??? // emitValDef(sym, "java.lang.Math.tanh(" + quote(x) + ")")
     case MathAtan(x)    => ??? // emitValDef(sym, "java.lang.Math.atan(" + quote(x) + ")")
     case MathAtan2(x,y) => ??? // emitValDef(sym, "java.lang.Math.atan2(" + quote(x) + ", " + quote(y) + ")")
-    case MathPow(x,y)   => ??? // emitValDef(sym, "java.lang.Math.pow(" + quote(x) + "," + quote(y) + ")")
+    case MathPow(x,y)   => ??? // emitValDef(sym,:q "java.lang.Math.pow(" + quote(x) + "," + quote(y) + ")")
     case MathAbs(x)     => ssa(sym) {
-      push(Const(lancet.codegen.Math))
       push(x)
-      invoke(lancet.codegen.Math.getClass, "abs", x.tp.runtimeClass)
+      invokeStatic(classOf[_root_.java.lang.Math], "abs", x.tp.runtimeClass, x.tp.runtimeClass)
     }
     case MathMax(x,y)   => ??? // emitValDef(sym, "java.lang.Math.max(" + quote(x) + ", " + quote(y) + ")")
     case MathMin(x,y)   => ??? // emitValDef(sym, "java.lang.Math.min(" + quote(x) + ", " + quote(y) + ")")

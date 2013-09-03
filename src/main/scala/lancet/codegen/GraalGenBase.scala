@@ -31,11 +31,11 @@ import scala.virtualization.lms.internal._
 import lancet.core._
 import scala.tools.nsc.io._
 import scala.tools.nsc.interpreter.AbstractFileClassLoader
-
 import java.util.concurrent.Callable
 import java.util.BitSet
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicLong
+import org.objectweb.asm.Opcodes
 
 import com.oracle.graal.java._
 import com.oracle.graal.phases._   // PhasePlan
@@ -63,7 +63,7 @@ import com.oracle.graal.api.meta._
 import com.oracle.graal.nodes.calc._
 import com.oracle.graal.api.runtime._
 import com.oracle.graal.nodes.spi._
-
+import scala.collection.mutable.ArrayBuffer
 
 object GEN_Graal_LMS {
   val classCounter = new AtomicLong(0L)
@@ -78,6 +78,16 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
   var cls: Class[_] = _
   var method: ResolvedJavaMethod = _
 
+  // TODO (until we are sure it works): instead of doing a lowering phase to method calls we do two passes.
+  var currentCalls: ArrayBuffer[JVMMethodCall] = new ArrayBuffer()
+  var methodCalls: ArrayBuffer[JVMMethodCall] = _
+  override def resetGenerator(): Unit = {
+    super.resetGenerator()
+    cls = null
+    method = null
+    currentCalls = new ArrayBuffer[JVMMethodCall]()
+  }
+
   /**
    * @param args List of symbols bound to `body`
    * @param body Block to emit
@@ -85,7 +95,7 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
    * @param stream Output stream
    */
   def emit[A : Manifest](args: List[Sym[_]], body: Block[A], className: String = genClassName()): List[(Sym[Any], Any)] = {
-    cls = generateAndLoadFunction(className, args.map(_.tp), manifest[A])
+    cls = FunctionTemplate.generateAndLoadFunction(className, args.map(_.tp), manifest[A], Nil)
     val reflectMeth = cls.getDeclaredMethod("apply", args.map(_.tp.runtimeClass):_*)
     method = runtime.lookupJavaMethod(reflectMeth)
 
@@ -94,23 +104,51 @@ trait GEN_Graal_LMS extends GraalNestedCodegen with GraalCompile with ExportGrap
       exportGraph(this.getClass.getName + "-lms")(body.res)
     }
 
+
     val staticData = getFreeDataBlock(body)
 
-    // initialize the stack with function arguments
-    args.foreach(insert)
+    { // TODO: first phase
+      // initialize the stack with function arguments
+      args.foreach(insert)
 
-    // initialize the graph builder state
-    graphBuilder.init(new StructuredGraph(method))
-    lastInstr = graph.start()
-    // finish the start block
-    lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0));
+      // initialize the graph builder state
+      graphBuilder.init(new StructuredGraph(method))
+      lastInstr = graph.start()
+      // finish the start block
+      lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0));
 
-    frameState.cleanupDeletedPhis()
-    frameState.setRethrowException(false)
+      frameState.cleanupDeletedPhis()
+      frameState.setRethrowException(false)
 
-    // LMS code generation
-    emitBlock(body)
-    push(body.res) // push the block result for the return
+      // LMS code generation
+      emitBlock(body)
+      push(body.res) // push the block result for the return
+    }
+
+    methodCalls = currentCalls
+    resetGenerator()
+    println(s"mcls = $methodCalls")
+
+    { // phase with method call info
+      cls = FunctionTemplate.generateAndLoadFunction(className + "-new", args.map(_.tp), manifest[A], methodCalls.toList)
+      val reflectMeth = cls.getDeclaredMethod("apply", args.map(_.tp.runtimeClass):_*)
+      method = runtime.lookupJavaMethod(reflectMeth)
+      // initialize the stack with function arguments
+      args.foreach(insert)
+
+      // initialize the graph builder state
+      graphBuilder.init(new StructuredGraph(method))
+      lastInstr = graph.start()
+      // finish the start block
+      lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0));
+
+      frameState.cleanupDeletedPhis()
+      frameState.setRethrowException(false)
+
+      // LMS code generation
+      emitBlock(body)
+      push(body.res) // push the block result for the return
+    }
 
     frameState.cleanupDeletedPhis()
     frameState.setRethrowException(false)
@@ -178,13 +216,43 @@ trait GraalCompile { self: GEN_Graal_LMS =>
     resMethod
   }
 
-  def compile[A: Manifest, B: Manifest]: A => B = {
+  def compile[A: Manifest, Ret: Manifest]: A => Ret = {
 
     val compiledMethod = compile0(cls)
 
     { (x:A) =>
-      val y = compiledMethod.executeVarargs(().asInstanceOf[AnyRef], x.asInstanceOf[AnyRef])
-      y.asInstanceOf[B]
+      val res = compiledMethod.executeVarargs(().asInstanceOf[AnyRef], x.asInstanceOf[AnyRef])
+      res.asInstanceOf[Ret]
+    }
+  }
+
+  def compile2[A: Manifest, B: Manifest, Ret: Manifest]: (A, B) => Ret = {
+
+    val compiledMethod = compile0(cls)
+
+    { (p1:A, p2: B) =>
+      val res = compiledMethod.executeVarargs(().asInstanceOf[AnyRef], p1.asInstanceOf[AnyRef], p2.asInstanceOf[AnyRef])
+      res.asInstanceOf[Ret]
+    }
+  }
+
+  def compile3[A: Manifest, B: Manifest, C: Manifest, Ret: Manifest]: (A, B, C) => Ret = {
+
+    val compiledMethod = compile0(cls)
+
+    { (p1:A, p2: B, p3: C) =>
+      val y = compiledMethod.executeVarargs(().asInstanceOf[AnyRef], p1.asInstanceOf[AnyRef], p2.asInstanceOf[AnyRef], p3.asInstanceOf[AnyRef])
+      y.asInstanceOf[Ret]
+    }
+  }
+
+  def compile4[A: Manifest, B: Manifest, C: Manifest, D: Manifest, Ret: Manifest]: (A, B, C, D) => Ret = {
+
+    val compiledMethod = compile0(cls)
+
+    { (p1:A, p2: B, p3: C, p4: D) =>
+      val y = compiledMethod.executeVarargs(().asInstanceOf[AnyRef], p1.asInstanceOf[AnyRef], p2.asInstanceOf[AnyRef], p3.asInstanceOf[AnyRef], p4.asInstanceOf[AnyRef])
+      y.asInstanceOf[Ret]
     }
   }
 
@@ -198,7 +266,7 @@ trait GraalCompile { self: GEN_Graal_LMS =>
        Meter.getValue(),
        Time.getValue(),
        Dump.getValue(),
-       "graal_1.apply",// MethodFilter.getValue()
+       "graal_1-new.apply",// MethodFilter.getValue()
        System.out,
        List(new GraphPrinterDumpHandler())
       )
@@ -253,6 +321,8 @@ trait GraalGenBase extends BlockTraversal {
   val graphBuilder: LancetGraphBuilder = new LancetGraphBuilder(runtime, config, OptimisticOptimizations.ALL)
   def graph: StructuredGraph = graphBuilder.currentGraph
 
+ def resetGenerator(): Unit = {}
+
   var analysisResults: MMap[String,Any] = null.asInstanceOf[MMap[String,Any]]
 
   // Initializer
@@ -292,25 +362,6 @@ trait GraalGenBase extends BlockTraversal {
   // ----------
 
   def genClassName() = "graal_" + GEN_Graal_LMS.classCounter.incrementAndGet
-
-  def generateAndLoadFunction(className: String, args: List[Manifest[_]], resTp: Manifest[_]): Class[_] = {
-    val fTemplate = new FunctionTemplate(className,
-      args,
-      resTp,
-      200,
-      10,
-      Nil
-    )
-    val classBytes = fTemplate.bytecode
-    val vfs = new VirtualDirectory("<vfs>", None)
-    val file = vfs.fileNamed(className + ".class")
-    val bout = file.bufferedOutput
-    bout.write(classBytes, 0, classBytes.length)
-    bout.flush
-    bout.close()
-    val loader = new AbstractFileClassLoader(vfs, this.getClass.getClassLoader)
-    loader.loadClass(className)
-  }
 
   // ----------
 
@@ -430,14 +481,20 @@ trait GraalBuilderNested extends GraalBuilder { self: GraalNestedCodegen =>
 
 }
 
-trait GraalBuilder { self: GraalGenBase =>
+trait GraalBuilder extends GraalGenBase {
   import IR._
   import graphBuilder._
 
-  val localsPos: MMap[Sym[Any], Int] = new MHashMap()
+  override def resetGenerator(): Unit = {
+    super.resetGenerator()
+    localsPos.clear()
+    localsSize = 1
+  }
+
   // separate from localsPos since Double and Long take 2 spots
   // starts from 1 because of the `this` pointer
   var localsSize: Int = 1
+  val localsPos: MMap[Sym[Any], Int] = new MHashMap()
 
   def tpString(e: Exp[Any]): String = e match {
     case _ if e.tp.erasure == classOf[Variable[Any]] => e.tp.typeArguments.head.toString
@@ -459,7 +516,6 @@ trait GraalBuilder { self: GraalGenBase =>
     case _        => Kind.Object
   }
 
-  // TODO choice between a list and a def
   def operation(sym: Sym[_])(node: Seq[ValueNode] => ValueNode): Unit = {
     insert(sym)
     val operands = rsyms(findDefinition(sym).get.rhs)(x => x.asInstanceOf[Exp[_]] :: Nil).toSeq.reverse
@@ -486,7 +542,7 @@ trait GraalBuilder { self: GraalGenBase =>
       frameState.apush(ConstantNode.forConstant(Constant.forObject(()), runtime, graph))
     case Const(v: AnyRef) =>
       frameState.apush(ConstantNode.forConstant(Constant.forObject(v), runtime, graph))
-    case sym@Sym(v) if sym.tp.toString == "Unit" => // TODO comment
+    case sym@Sym(v) if sym.tp.toString == "Unit" =>
       frameState.apush(ConstantNode.forConstant(Constant.forObject(()), runtime, graph))
     case sym@Sym(v) =>
       val loc = frameState.loadLocal(lookup(sym))
@@ -516,12 +572,22 @@ trait GraalBuilder { self: GraalGenBase =>
     fs.clearNonLiveLocals(removeLocals)
   }
 
-  def invokeStatic(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
+  def invokeStatic(clazz: Class[_], methodName: String, resType: Class[_], argTypes: Class[_]*) = {
     val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
     val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
+
+    val currentCall = JVMMethodCall(Opcodes.INVOKESTATIC, clazz.getName.replaceAll("\\.", "/"), methodName, argTypes.toList, resType)
+    currentCalls += currentCall
+    val bci = if(methodCalls != null)
+      methodCalls.takeWhile(x => x != currentCall)
+        .foldLeft(0)((x,y) => x + 1 + y.args.size + 4) + (1 + argTypes.size)
+    else 0
+
+    stream.setBCI(bci)
+
     genInvokeStatic(resolvedMethod)
 
-     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
+    lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
 
     // block stuff
     val nextFirstInstruction = currentGraph.add(new LancetGraphBuilder.BlockPlaceholderNode())
@@ -536,13 +602,25 @@ trait GraalBuilder { self: GraalGenBase =>
     lastInstr = nextFirstInstruction
   }
 
-  def invoke(clazz: Class[_], methodName: String, argTypes: Class[_]*) = {
+  def methodCalls: Seq[JVMMethodCall]
+  def currentCalls: ArrayBuffer[JVMMethodCall]
+  def invoke(clazz: Class[_], methodName: String, retType: Manifest[_], argTypes: Manifest[_]*): Unit =
+    invoke(clazz, methodName, retType.runtimeClass, argTypes.map(_.runtimeClass):_*)
+
+  def invoke(clazz: Class[_], methodName: String, retType: Class[_], argTypes: Class[_]*): Unit = {
     val reflMethod = clazz.getDeclaredMethod(methodName, argTypes:_*);
     val resolvedMethod = runtime.lookupJavaMethod(reflMethod)
-    val graalArgs = frameState.popArguments(
-      resolvedMethod.getSignature().getParameterSlots(true),
-      resolvedMethod.getSignature().getParameterCount(true))
-    genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
+    val currentCall = JVMMethodCall(Opcodes.INVOKEVIRTUAL, clazz.getName.replaceAll("\\.", "/"), methodName, argTypes.toList, retType)
+    currentCalls += currentCall
+    val bci = if(methodCalls != null)
+      methodCalls.takeWhile(x => x != currentCall)
+        .foldLeft(0)((x,y) => x + 1 + y.args.size + 4) + (1 + argTypes.size)
+    else 0
+    Predef.println("Virtual bci: " + bci)
+    stream.setBCI(bci)
+    // graalArgs
+    genInvokeSpecial(resolvedMethod)
+    // genInvokeIndirect(MethodCallTargetNode.InvokeKind.Virtual, resolvedMethod, graalArgs)
     lastInstr.asInstanceOf[StateSplit].setStateAfter(frameState.create(0))
 
     // block stuff
@@ -562,18 +640,20 @@ trait GraalBuilder { self: GraalGenBase =>
     push(s)
     tpString(s) match {
       case  "java.lang.String" =>
+      case "Char" =>
+        invokeStatic(classOf[_root_.java.lang.Character], "toString", classOf[String], classOf[Char])
       case "Int" =>
-        invokeStatic(classOf[Integer], "toString", classOf[Int])
+        invokeStatic(classOf[Integer], "toString", classOf[String], classOf[Int])
       case "Long" =>
-        invokeStatic(classOf[_root_.java.lang.Long], "toString", classOf[Long])
+        invokeStatic(classOf[_root_.java.lang.Long], "toString", classOf[String], classOf[Long])
       case "Double" =>
-        invokeStatic(classOf[_root_.java.lang.Double], "toString", classOf[Double])
+        invokeStatic(classOf[_root_.java.lang.Double], "toString", classOf[String], classOf[Double])
       case "Float" =>
-        invokeStatic(classOf[_root_.java.lang.Float], "toString", classOf[Float])
+        invokeStatic(classOf[_root_.java.lang.Float], "toString", classOf[String], classOf[Float])
       case "Boolean" =>
-        invokeStatic(classOf[_root_.java.lang.Boolean], "toString", classOf[Boolean])
+        invokeStatic(classOf[_root_.java.lang.Boolean], "toString", classOf[String], classOf[Boolean])
       case "AnyRef" =>
-        invoke(s.tp.runtimeClass, "toString")
+        invoke(s.tp.runtimeClass, "toString", classOf[String], classOf[String])
   }}
 
   def ssa(sym: Sym[_])(block: =>Unit) = {

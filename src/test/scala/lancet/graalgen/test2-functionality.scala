@@ -41,10 +41,17 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
-        println(i)
+        // val l: Rep[Long] = v.toLong
+        val f: Rep[Float] = v.toFloat
+        val d: Rep[Double] = v.toDouble
+        print("a")
+        println("b")
         println(i + 1)
-        // println(i + 2)
-        // println(i + 3.0D)
+        println(i + 2)
+        println(i + 3.0D)
+        println("Int = " + i)
+        println("Float = " + f)
+        println("Double = " + d)
         v
       }
     }
@@ -55,7 +62,7 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     }
   }
 
-  /*def testArithmetics = withOutFile(prefix+"-arithmetics") {
+  def testArithmetics = withOutFile(prefix+"-arithmetics") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val i: Rep[Int] = v
@@ -108,9 +115,9 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-arithmetics-out"){
       f(1)
     }
-  }*/
+  }
 
-  /*def testConditions = withOutFile(prefix + "-conditions") {
+  def testConditions = withOutFile(prefix + "-conditions") {
     trait Prog extends DSL {
 
       def main(v: Rep[Int]): Rep[Int] = {
@@ -227,20 +234,20 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-while-out") {
       println(f(10))
     }
-  }*/
+  }
 
-/*def testStrings = withOutFile(prefix+"-strings") {
+def testStrings = withOutFile(prefix+"-strings") {
     trait Prog extends DSL {
       def main(v: Rep[Int]): Rep[Int] = {
         val s: Rep[String] = " " + v
-        // println(s startsWith "1")
-        // println(s endsWith " ")
-        // println(s contains "1")
-        // println(s charAt 1)
-        // println(s.toDouble)
-        // println(s.toFloat)
-        // println(s.toInt)
-        // println(s.trim)
+        println(s startsWith " ")
+        println(s endsWith "1")
+        println(s contains "1")
+        println(s charAt 1)
+        println(s.trim)
+        println(s.trim.toDouble)
+        println(s.trim.toFloat)
+        println(s.trim.toInt)
         v
       }
     }
@@ -249,5 +256,5 @@ class TestFunctionality extends FileDiffSuite with GraalGenBase {
     withOutFileChecked(prefix+"-strings-out"){
       f(1111)
     }
-  }*/
+  }
 }
